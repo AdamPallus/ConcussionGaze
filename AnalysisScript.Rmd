@@ -44,13 +44,14 @@ source('knighthelperfunctions.R')
 
 samplerate<- 304.7508/1000
 
-path<- "F:/dropbox/kdata/"
-h<- loadnewheadfree(NULL,path)
-h<- select(h,1:11)
-names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum')
+# path<- "F:/dropbox/kdata/"
+# h<- loadnewheadfree(NULL,path)
+h<-loadnewheadfree()
+h<- select(h,1:13)
+names(h)<- c('G','GV','H','HV','E','EV','time','Targ','Targ2','block','subject','blocknum','task')
 
 h%>%
-  select(G,H,Targ,block,subject)%>%
+  select(G,H,Targ,block,subject,task)%>%
   group_by(block) %>%
   mutate(time=row_number(),
          Graw=G,
@@ -69,12 +70,23 @@ h%>%
 #measure trials join to previous table if needed
 h %>%
   filter(!is.na(trialnum)) %>%
-  group_by(subject,block,trialnum) %>%
+  group_by(task,subject,block,trialnum) %>%
   do(measureTrial(.))->
+  hm
+
+hm %>%
+  mutate(recenter=(task=='AS' & abs(IGP)>10)) %>%
+  filter(!recenter) %>%
+  select(-recenter)->
   hm
 
 #load the measured data. See previous report for this process. 
 # hm <- readRDS('knightMeasuredDemo2018.RDS')
+
+#For plotting raw data:
+# hh<- left_join(h,hm)
+# hh<- filter(hh,trialnum %in% unique(hm$trialnum))
+# saveRDS(hh,'AntiSaccadeTest.RDS')
 ```
 
 

@@ -61,7 +61,7 @@ markTagetMovements<-function(t,buffer=200,threshold=1000,trial.length=1000){
   select(t,-target.velocity)
 }
 
-loadnewheadfree<- function(referencefile=NULL,path="~/kdata/"){
+loadnewheadfree<- function(referencefile=NULL,path="~/GitHub/ConcussionGaze/kdata/"){
   require(stringr)
   require(dplyr)
   require(data.table)
@@ -96,15 +96,25 @@ loadnewheadfree<- function(referencefile=NULL,path="~/kdata/"){
       # loadedfiles[[i]]$blocknum<-as.numeric(names[3])
       #updated for 2-25-2018 
       #remove extra rows
-      loadedfiles[[i]]<- select(loadedfiles[[i]],1:8)
+      loadedfiles[[i]]<- select(loadedfiles[[i]],1:9)
       #files are named with Subject ID bU07 and block ST1 with ST standing for Saccade Task
       names<-str_match(f,"(^[a-zA-Z0-9]{4})([a-zA-Z0-9]{3})")
       loadedfiles[[i]]$block<-names[1]
       loadedfiles[[i]]$subject<-names[2]
       loadedfiles[[i]]$blocknum<-as.numeric(str_sub(names[3],3))
+      task<-str_sub(names[3],1,2)
+      loadedfiles[[i]]$task<- task
+      if (task=='AS'){ #antisaccade dask needs target data fixed
+        #'There are three targets in the anti saccade files
+        #'but only the second is useful. The central fixation is always at zero
+        #'If this changes, the value in V7 should be used instead of zero
+        targ<- loadedfiles[[i]]$V8
+        targ<- replace(targ,targ< -80,0)
+        loadedfiles[[i]]$V8=targ
+      }
       
     }
-    t <-rbindlist(loadedfiles)
+    t <-rbindlist(loadedfiles,fill = TRUE)
     # t<- dplyr::select(t, -thp,-tvp,-time)
   }else{
     message('********NO NEW DATA********')
@@ -251,6 +261,7 @@ measureTrial<- function(tt, buffer=200){
   #This function will receive data from one trial and return a one-row data frame
   
   trial.length<- nrow(tt)
+  # task<-first(tt$task)
   
   #identify the id number of the first saccade that satisfies the criteria 
   firstshift=min(tt$gazeshifts[buffer:trial.length],na.rm=T)
@@ -372,7 +383,8 @@ measureTrial<- function(tt, buffer=200){
             target.amp,
             total.missing,
             missing.critical,
-            missing.gs
+            missing.gs#,
+            # task
   )
   
   # message(paste0('Success: ',tt$trialnum[1],'\n'))

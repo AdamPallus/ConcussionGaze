@@ -4,6 +4,8 @@
 *.RDS
 *.nb.html
 *.csv
+*.txt
+*.pdf
 [pP]lots
 rsconnect
 
@@ -223,3 +225,4 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
+.Rproj.user
