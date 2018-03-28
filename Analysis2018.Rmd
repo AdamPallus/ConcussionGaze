@@ -1,0 +1,658 @@
+---
+title: "Concussion Data Analysis Report 2018"
+author: Adam Pallus
+date: Febuary 2018
+output:
+  html_document: default
+  html_notebook: default
+---
+
+#Introduction
+This is my first attempt to put everything together and get some desired results. Significant effort has been devoted to salvaging trials with missing data.
+
+The plan: 
+
+1. Find each trial based on the movement of the target. We will look at 200 samples before the target moves and 600 samples after. Each sample is approximately 3 ms. 
+
+2. For each trial, measure the eye and head movements. Identify gaze shifts and associated head movements. 
+
+3. Summarize the data into plots for statistics
+
+#Analysis
+
+```{r loadlibraries,message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(knitr)
+library(broom)
+source('knighthelperfunctions.R')
+```
+
+```{r loaddata,message=FALSE}
+samplerate<- 304.7508/1000
+path<- "F:/dropbox/kdata/"
+# path<-"C:/Users/setup/Desktop/NRTP Vergence/kdata/"
+h<- loadnewheadfree(NULL,path)
+
+# h<- read.csv('HEADFREE.txt',sep="\t",header=FALSE)
+# h<- select(h,-V9)
+names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum')
+
+```
+
+Once loaded, the raw data we will work with contains the horizontal and vertical gaze (G and GV), head and eye positions, the time in seconds, the horizontal target position (Targ), the blockname, which consists of subject-blocknum.
+
+For the purposes of our initial analysis, we will just look at the horizontal positions of the head and gaze.
+
+```{r}
+head(h)
+
+h<- select(h,G,H,Targ,block,subject,blocknum)
+
+head(h)
+```
+
+Next we will identify and mark the trials based on the target movement. We will give each trial a number (trialnum), and add a variable called counter that marks time since the trial began.
+
+```{r,message=FALSE,warning=FALSE}
+
+raw.h<- h
+h%>%
+  group_by(block) %>%
+  mutate(time=row_number(),
+         Graw=G,
+         G=replace(smooth(G,"3R"),G==0,NA), #mark missing data as NA rather than 0
+         Gnospline=G,
+         G= applyspline(G,6),
+         target.velocity=parabolicdiff(Targ,7)*samplerate,
+         Gv=parabolicdiff(G,7)*samplerate, #calculate velocity
+         Hv=parabolicdiff(H,7)*samplerate,
+         gazeshifts=markMovementsDouble(Gv,threshold1=100,threshold2=10),
+         headmovement=markMovementsDouble(Hv,threshold1=10,threshold2=4)) %>%
+  do(markTagetMovements(t=.,buffer=200,threshold=200,trial.length=500)) ->
+  h
+
+head(h)
+```
+
+Notice that time now is in samples rather than seconds and the trialnum and counter are NA. This is because there is no trial at the beginning of the data set. Let's get rid of all of those periods:
+
+```{r}
+h<- filter(h,!is.na(trialnum))
+
+head(h)
+```
+
+Now we can see that trial 1 begins at time 13096. Let's look at the raw data for this trial:
+
+```{r}
+h %>%
+  filter(block=='bU07ST1',trialnum==5) %>%
+  ggplot()+
+  geom_point(aes(counter,Graw),color='darkgreen')+
+  geom_line(aes(counter,Targ),color='gray50',size=2)+
+  geom_line(aes(counter,H),color='darkblue',size=2)
+
+```
+
+Clearly there is missing data here, which is recorded in the data file as 0. We will discuss what to do about missing data in a later section. 
+
+#Measuring the trial
+
+We will calculate:
+
+* Target amplitude
+* Primary gaze shift
+    + latency
+    + amplitude
+    + peak velocity
+    + duration
+    
+* Primay head movement
+    + latency
+    + amplitude
+    + peak velocity
+    + contribution to gaze shift
+    
+* Eye Position in head
+    + Initial: at start of primary gaze shift
+    + End: at end of primary gaze shift
+    + at the end of all gaze steps (see below)
+    
+* Subsequent gaze shifts
+    + latency - intersaccadic interval
+    + amplitude
+    + duration
+    + number of steps
+    + total gaze amplitude
+    + total gaze duration
+    
+*Saccades with peak velocities below 200 deg/s are considered corrective gaze shifts and are not included in the analysis.*
+
+*Saccades with intersaccadic intervals > 150 ms are not included*
+
+*If there are two head movements in response to a single target movement, we ignore the second -- FOR NOW. *
+
+*Head movement is only considered part of the gaze shift if it starts within 100 ms of the initial gaze shift*
+
+*Head movement that starts after the end of the primary gaze shift is ignored*
+
+*Trials with non-zero gaze velocity within 100 ms of target movement are rejected*
+
+*Trials where the primary gaze shift is "BAD" are rejected*
+
+```{r measuretrial,warning=FALSE,include=FALSE}
+
+
+h %>%
+  filter(!is.na(trialnum)) %>%
+  group_by(subject,block,trialnum) %>%
+  do(measureTrial(.))->
+  hm
+
+
+
+
+  # #junk any trials where there is no gaze shift within 300 ms 
+  # #junk any trials where the saccade starts too soon
+  # filter(gaze.onset>100,gaze.onset<300)->
+
+```
+
+As an example, let's see how closely the primary gaze shift amplitude matches the target amplitude. 
+
+```{r}
+ggplotly(
+  hm %>%
+  ggplot()+
+  geom_point(aes(target.amp,gaze.amp))+
+  facet_wrap(~block)+
+  xlab('Target Amplitude')+
+  ylab('Primary Gaze Shift Amplitude')+
+  geom_abline()+
+    theme_minimal()
+)
+```
+
+It seems to match very well for most trials, but there are clearly some outliers. I suspect that these are tiny gaze shifts that are not made in response to the target. Let's look at the latency to see if this can be used to reject the outliers. 
+
+```{r,message=FALSE}
+ggplotly(
+  hm %>%
+    ggplot()+
+    geom_histogram(aes((gaze.onset-200)/samplerate))+
+  facet_wrap(~block)+
+    theme_minimal()+
+    xlab('Gaze Shift Latency (ms)')
+
+)
+```
+It seems that we have outliers that are both made too soon and too late. Let's just plot trials where the gaze shift starts at least 150 ms after the target moves but not more than 500 ms after.
+
+```{r}
+ggplotly(
+  hm %>%
+    mutate(gs.latency=(gaze.onset-200)/samplerate) %>%
+    filter(gs.latency>150,gs.latency<500) %>%
+  ggplot()+
+  geom_point(aes(target.amp,gaze.amp))+
+  facet_wrap(~block)+
+  xlab('Target Amplitude')+
+  ylab('Primary Gaze Shift Amplitude')+
+  geom_abline()+
+    theme_minimal()
+)
+```
+
+Since we are only looking at the primary gaze shift, it's likely that some of these outlier trials are actually multi-step. Let's instead plot the total gaze amplitude. 
+
+```{r}
+ggplotly(
+  hm %>%
+    mutate(gs.latency=(gaze.onset-200)/samplerate) %>%
+    filter(gs.latency>150) %>%
+  ggplot()+
+  geom_point(aes(target.amp,total.gaze.amp))+
+  facet_wrap(~block)+
+  xlab('Target Amplitude')+
+  ylab('Total Gaze Shift Amplitude')+
+  geom_abline()+
+    theme_minimal()
+)
+```
+
+We can go through other measurements like this and see if there are other refinements that we can make, or if there are some things being measured incorrectly. Missing data is still an issue though.
+
+#Missing data
+Our choice: 
+
+1. Drop all trials with missing data
+2. Ignore the missing data
+3. Interpolate the missing data
+
+Let's assess the severity of the missing data problem. I will define three levels of severity: 
+
+1. Any data are missing for the duration of the trial
+2. Data are missing during the first 200 samples after the target has moved
+3. More than 10 data points are missing 
+
+```{r}
+hm%>%
+  group_by(block) %>%
+  summarize(n=n(),
+            any.missing=sum(total.missing>0),
+            missing.critical=sum(missing.critical>0), #within 100 samples of target move
+            missing.gs=sum(missing.gs>0))->
+  hss
+
+
+head(hss)
+```
+
+From this, we can see that most of the trials are missing a few data points. More importantly though, less than 20% of the trials are missing data within 100 samples  of the target's movement. Nevertheless, we might be missing important data at other parts of the trial. In particular, this might be an issue during large gaze shifts.
+
+```{r}
+hm %>%
+  ggplot()+
+  geom_point(aes(target.amp,total.missing))+
+  facet_wrap(~block)
+```
+
+It seems that the most missing data comes from leftward trials from the second block. Let's see if it's related to head movement.
+
+```{r}
+ggplotly(hm %>%
+  ggplot()+
+  geom_point(aes(head.amp,total.missing))+
+  facet_wrap(~block) )
+```
+
+It appears that it is related to head movement. In order to avoid throwing out these trials, I implemented an interpolation. I will demonstrate how this works.
+
+##Interpolating Missing data
+
+First lets look again at the first trial from the first block. The missing data points are represented by zeros in the data file. But there are also points surrounding the missing data that seem to be artifacts. I have drawn a pink box around one such point in the plot below. 
+
+```{r}
+h %>%
+  filter(block=='A-01',trialnum==1) %>%
+  ggplot()+
+  geom_point(aes(counter,Graw),color='darkgreen')+
+  geom_line(aes(counter,Targ),color='gray50',size=2)+
+  geom_line(aes(counter,H),color='darkblue',size=2)+
+  annotate('rect',xmin = 220,xmax=260,ymin=36,ymax=41,color='hotpink',alpha=0,size=2)
+```
+
+I want to interpolate the missing points, but these non-missing but wrong points will interfer with the interpolation. To address this, I replace all the zeros with NAs, and also remove a number of points on each side of the missing data. This is a balancing act because we don't want to remove good data, but we want to remove enough of the bad data I used six points to make the plot below:
+
+```{r}
+ggplotly(
+  h %>%
+  filter(block=='A-01',trialnum==1) %>%
+  ggplot()+
+  geom_point(aes(counter,Gnospline),color='darkgreen')+
+  geom_line(aes(counter,Targ),color='gray50',size=2)+
+  geom_line(aes(counter,H),color='darkblue',size=2)
+)
+```
+
+now to interpolate, I use a cubic spline using the **splinefun** function in R. I just tried different methods until one seemed to work pretty well. The goal is to try to salvage some of the trials with missing data in the middle of a gaze shift. The example is one of the worst trials, so if it works on this it will be very useful. 
+
+
+```{r}
+ggplotly(
+  h %>%
+  filter(block=='A-01',trialnum==1) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+```
+
+It's not perfect, but it does work very well considering how many data points are missing. Below, I will plot some of the trials with the most missind data points during the gaze shifts:
+
+```{r,include=FALSE}
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==19) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==100) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==71) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==24) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+```    
+```{r}
+missingtable<- hm %>% select(block,trialnum,missing.gs) %>% arrange(desc(missing.gs))
+kable(head(missingtable,20))
+```
+
+Let's look at some trials where there are around 30 missing data points:
+
+```{r,include=FALSE}
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==125) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==10) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==45) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+```
+
+That doesn't seem to be a reliable threshold, so let's see how many trials we will reject if we go with a lower threshold:
+
+```{r,message=FALSE}
+missingtable %>%
+  filter(missing.gs>0) %>%
+  ggplot()+
+  geom_histogram(aes(missing.gs))+
+  xlab('number of missing points during the gaze shift\n
+       Trials with no missing data are omitted')
+
+missingtable %>%
+  group_by(block) %>%
+  summarize(rejected30=sum(missing.gs>30),
+            rejected20=sum(missing.gs>20)) %>%
+  head() %>%
+  kable()
+```
+
+```{r}
+missingtable %>%
+  filter(missing.gs<30) %>%
+  head(10)%>%
+  kable()
+```
+
+Here are some trials that would be included using the <30 missing points threshold:
+
+```{r}
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==18) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==119) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==89) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+```
+
+That's still not consistently good, so let's look at a threshold of 20:
+
+```{r}
+missingtable %>%
+  filter(missing.gs<20) %>%
+  head(10)%>%
+  kable()
+```
+```{r}
+ggplotly(
+  h %>%
+  filter(block=='A-01',trialnum==1) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-01',trialnum==112) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+
+ggplotly(
+  h %>%
+  filter(block=='A-02',trialnum==110) %>%
+  ggplot()+
+    geom_point(aes(counter,G),color='orange')+
+    geom_point(aes(counter,Gnospline),color='darkgreen')+
+    geom_line(aes(counter,Targ),color='gray50',size=2)+
+    geom_line(aes(counter,H),color='darkblue',size=2)+
+    ggtitle('Missing data interpolated')
+)
+```
+
+A threshold of 20 missing points seems to be more successful. This results in rejecting 8 trials from block 1 and 24 trials from block 2. If the number of trials is small enough, perhaps we could simply flag the trials with interpolated points and have a human make the decision about whether to reject them. 
+
+```{r}
+
+hm %>%
+  mutate(gaze.onset.ms=(gaze.onset-200)/samplerate)->  hm
+
+qplot(gaze.onset.ms,data=hm)+
+    geom_vline(xintercept = 150,color='red')+
+  geom_vline(xintercept = 500,color='red')
+
+hm %>%
+  filter(missing.gs<20,
+         gaze.onset.ms>150,
+         gaze.onset.ms<500) %>%
+  
+  ungroup()->
+  hpp
+```
+
+```{r requestedplots}
+
+ggplot(hpp,aes(gaze.amp,color=block))+
+  geom_density()
+
+ggplot(hpp,aes(target.amp,color=block))+
+  geom_density()
+# 
+# a. comparison of pre and post mean Gaze peak velocity
+ggplot(hpp,aes(abs(gaze.amp),abs(peak.gaze.velocity),color=block))+
+  geom_point()+
+  stat_smooth(method='lm')+
+  xlab('Gaze shift amplitude (deg)')+
+  ylab('Peak gaze shift velocity (deg/s)')
+# b. comparison of pre and post mean Gaze latency
+ggplot(hpp,aes(abs(gaze.amp),gaze.onset/samplerate,color=block))+
+  geom_point()+
+  stat_smooth(method='lm')+
+  xlab('Gaze shift latency (ms)')+
+  ylab('Gaze shift amplitude (deg)')
+
+# c. comparison of pre and post mean primary Gaze gain
+ggplot(hpp,aes(abs(target.amp),abs(gaze.amp),color=block))+
+  geom_point()+
+  geom_abline()+
+  stat_smooth(method='lm')+
+  xlab('target amplitude (deg)')+
+  ylab('Gaze shift amplitude (deg)')+
+  annotate('text',30,80,label='First saccade only; both directions')
+# 
+# d. comparison of pre and post mean Head peak velocity
+ggplot(hpp,aes(abs(gaze.amp),abs(peak.head.velocity),color=block))+
+  geom_point()+
+  stat_smooth(method='lm')+
+  xlab('Gaze shift amplitude (deg)')+
+  ylab('Peak head speed (deg/s)')
+# e.comparison of pre and post mean Head latency
+
+# f. comparison of pre and post mean head contribution to gaze\
+ggplot(hpp,aes(abs(gaze.amp),abs(head.contribution),color=block))+
+  geom_point()+
+  stat_smooth(method='lm')+
+  xlab('Gaze shift amplitude (deg)')+
+  ylab('Head Contribution (deg)')
+
+ggplot(filter(hpp,abs(head.contribution)<10),aes(abs(gaze.amp),abs(head.contribution),color=block))+
+  geom_point()+
+  stat_smooth(method='lm')+
+  xlab('Gaze shift amplitude (deg)')+
+  ylab('Head Contribution (deg)')+
+  ggtitle('Outliers removed')
+
+# g. comparison of pre and post mean head contribution gain
+# h. comparison of pre and post mean head total amp
+
+# i. comparison of pre and post mean head total amp gain
+# 
+# j. comparison of pre and post mean final eye position re: head
+```
+
+```{r}
+
+hpp %>%
+  ggplot()+
+  geom_histogram(aes(target.amp))
+
+hpp %>%
+  ggplot()+
+  geom_histogram(aes(target.amp,fill=block))
+
+hpp %>%
+  filter(abs(target.amp)<100) %>%
+  ggplot()+
+  geom_boxplot(aes(as.factor(round(target.amp)),total.gaze.amp,fill=block))+
+  theme_minimal()
+
+hpp %>%
+  filter(abs(target.amp)<100) %>%
+  ggplot()+
+  geom_boxplot(aes(as.factor(abs(round(target.amp))),abs(total.gaze.amp),fill=block))+
+  theme_minimal()
+```
+```{r}
+hpp <- mutate(hpp,amp.bins.right=cut(target.amp,breaks=c(0,10,20,30,40,50,60,70)))
+hpp <- mutate(hpp,amp.bins.left=cut(target.amp,breaks=c(0,-10,-20,-30,-40,-50,-60,-70)))
+hpp <- mutate(hpp,amp.bins=cut(target.amp,breaks=c(-70,-60,-50,-40,-30,-20,-10,0,10,20,30,40,50,60,70)))
+hpp <- mutate(hpp,amp.bins.combined=cut(abs(target.amp),breaks=c(0,10,20,30,40,50,60,70)))
+
+
+
+
+ggplot(filter(hpp,!is.na(amp.bins)))+
+  geom_boxplot(aes(amp.bins,(gaze.onset-200)/samplerate,fill=block))+
+  ylab('Gaze Shift Latency (ms)')+
+  xlab('Gaze shift amplitude bins (deg)')+
+  theme_minimal()
+
+ggplot(filter(hpp,!is.na(amp.bins)))+
+  geom_boxplot(aes(amp.bins,head.contribution,color=block))+
+  ylab('Head Contribution (deg)')+
+  xlab('Gaze shift amplitude bins (deg)')
+
+ggplot(filter(hpp,!is.na(amp.bins.right)))+
+  geom_boxplot(aes(amp.bins.right,(gaze.onset-200)/samplerate,color=block))+
+  ylab('Gaze Shift Latency (ms)')+
+  xlab('Gaze shift amplitude bins (deg)')
+
+ggplot(filter(hpp,!is.na(amp.bins.right)))+
+  geom_boxplot(aes(amp.bins.right,head.contribution,color=block))+
+  ylab('Head Contribution (deg)')+
+  xlab('Gaze shift amplitude bins (deg)')
+
+ggplot(filter(hpp,!is.na(amp.bins.left)))+
+  geom_boxplot(aes(amp.bins.left,(gaze.onset-200)/samplerate,color=block))+
+  ylab('Gaze Shift Latency (ms)')+
+  xlab('Gaze shift amplitude bins (deg)')
+
+ggplot(filter(hpp,!is.na(amp.bins.left)))+
+  geom_boxplot(aes(amp.bins.left,head.contribution,color=block))+
+  ylab('Head Contribution (deg)')+
+  xlab('Gaze shift amplitude bins (deg)')
+
+ggplot(filter(hpp,!is.na(amp.bins)))+
+  geom_boxplot(aes(amp.bins.combined,(gaze.onset-200)/samplerate,fill=block))+
+  ylab('Gaze Shift Latency (ms)')+
+  xlab('Gaze shift amplitude bins combined left and right (deg)')+
+  theme_minimal()
+```
+

@@ -1,0 +1,129 @@
+---
+title: "Online Analysis"
+author: "Adam Pallus"
+date: "February 26, 2018"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(shiny.maxRequestSize=30*1024^2) 
+library(ggplot2)
+library(stringr)
+library(dplyr)
+library(ggpubr)
+library(plotly)
+source('knighthelperfunctions.R')
+samplerate<- 304.7508/1000
+```
+
+
+```{r eruptions, echo=FALSE}
+inputPanel(
+  fileInput("file1", "Choose Pre File",
+            accept = c(
+              "text/csv",
+              "text/plain",
+              ".txt")
+  ),
+  
+  fileInput("file2", "Choose Post File",
+            accept = c(
+              "text/csv",
+              "text/plain",
+              ".txt")
+  ),
+  actionButton(inputId = "process",label = 'Process',icon("refresh"))
+)
+
+mainPanel(
+  plotOutput('showboxplot')
+)
+
+
+makePlot<- reactive({
+  input$process
+  # cat('BUTTON PRESSED')
+  
+  isolate({
+    if (!is.null(input$file1) & !is.null(input$file2)){
+      f1<- input$file1$datapath
+      f2<- input$file2$datapath
+      n1<- input$file1$name
+      n2<-input$file2$name
+      
+      withProgress(message = 'Loading files...',
+                   expr = {
+                     t1<- read.csv(f1,sep='\t',header=FALSE)
+                     t2<- read.csv(f2,sep='\t',header=FALSE)
+                     names<-str_match(n1,"(^[a-zA-Z0-9]{4})([a-zA-Z0-9]{3})")
+                     t1$block<-names[1]
+                     t1$subject<-names[2]
+                     t1$blocknum<-as.numeric(str_sub(names[3],3))
+                     names<-str_match(n2,"(^[a-zA-Z0-9]{4})([a-zA-Z0-9]{3})")
+                     t2$block<-names[1]
+                     t2$subject<-names[2]
+                     t2$blocknum<-as.numeric(str_sub(names[3],3))
+                     h<-rbind(t1,t2)
+                     h<- select(h,1:11)
+                     names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum')
+                     
+                     h%>%
+                       select(G,H,Targ,block,subject)%>%
+                       group_by(block) %>%
+                       mutate(time=row_number(),
+                              Graw=G,
+                              G=replace(smooth(G,"3R"),G==0,NA), #mark missing data as NA rather than 0
+                              Gnospline=G,
+                              G= applyspline(G,6),
+                              target.velocity=parabolicdiff(Targ,7)*samplerate,
+                              Gv=parabolicdiff(G,7)*samplerate, #calculate velocity
+                              Hv=parabolicdiff(H,7)*samplerate,
+                              gazeshifts=markMovementsDouble(Gv,threshold1=100,threshold2=10),
+                              headmovement=markMovementsDouble(Hv,threshold1=10,threshold2=4)) %>%
+                       do(markTagetMovements(t=.,buffer=200,threshold=200,trial.length=500))%>%
+                       filter(!is.na(trialnum))->
+                       h
+                     
+                     h %>%
+                       filter(!is.na(trialnum)) %>%
+                       group_by(subject,block,trialnum) %>%
+                       do(measureTrial(.))->
+                       hm
+                     hm %>%
+                       mutate(gaze.onset.ms=(gaze.onset-200)/samplerate) %>%
+                       filter(missing.gs<20,
+                              gaze.onset.ms>150,
+                              gaze.onset.ms<500,
+                              abs(peak.gaze.velocity) > 200,
+                              abs(fixation.velocity)<30) %>%
+                       mutate(blocknum=as.factor(str_sub(block,7)))%>%
+                       ungroup()->
+                       hpp
+                     
+                     hpp <- mutate(hpp,amp.bins.combined=cut(abs(target.amp),breaks=c(0,20,40,60,80)))
+                     
+                     
+                     
+                   })
+
+      hpp %>%
+        filter(!is.na(amp.bins.combined),
+               blocknum<=2) %>%
+        ggboxplot( x = "blocknum", y = "abs(peak.gaze.velocity)",
+                   color = "blocknum", palette = "jco",
+                   add = "jitter",
+                   facet.by = c("subject","amp.bins.combined"), short.panel.labs = TRUE)+
+        stat_compare_means(label = "p.signif")
+      
+    }
+  })
+})
+
+output$showboxplot<- renderPlot(makePlot())
+
+```
+
+
+

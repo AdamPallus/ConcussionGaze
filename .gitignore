@@ -3,7 +3,9 @@
 ##########
 *.RDS
 *.nb.html
+*.csv
 [pP]lots
+rsconnect
 
 #################
 ## Eclipse

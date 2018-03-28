@@ -1,0 +1,166 @@
+---
+title: "Stats for Concussion Data"
+output:
+  html_document: 
+    fig_height: 7
+  html_notebook: default
+---
+
+#Analysis
+Previous reports have focused on the data cleaning and measurements. This report will apply the measurement functions described previously to new data. We present data from three subjects across two blocks - before and after, as well as three additional timepoints for one of the subjects. 
+
+In order to verify that the trials are being measured correctly, we should visually inspect the trials and measurements. I would start by useing the measurements to identify outliers and then looking at those trials to explain any what may be causing them to be outliers. We should also look at the trials to determine an explanation for any significant or unexpected results. 
+
+```{r,echo=FALSE,message=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE,message=FALSE,warning=FALSE,cache=FALSE)
+```
+
+```{r,message=FALSE,warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(broom)
+library(ggpubr)
+library(stringr)
+source('knighthelperfunctions.R')
+
+samplerate<- 304.7508/1000
+
+path<- "F:/dropbox/kdata/"
+h<- loadnewheadfree(NULL,path)
+h<- select(h,1:11)
+names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum')
+
+h%>%
+  select(G,H,Targ,block,subject)%>%
+  group_by(block) %>%
+  # filter(!is.na(G)) %>%
+  mutate(time=row_number(),
+         G=replace(G,is.na(G),0),
+         Graw=G,
+         G=replace(smooth(G,"3R"),G==0,NA), #mark missing data as NA rather than 0
+         Gnospline=G,
+         G= applyspline(G,4),
+         target.velocity=parabolicdiff(Targ,7)*samplerate,
+         Gv=parabolicdiff(G,7)*samplerate, #calculate velocity
+         Hv=parabolicdiff(H,7)*samplerate,
+         gazeshifts=markMovementsDouble(Gv,threshold1=100,threshold2=10),
+         headmovement=markMovementsDouble(Hv,threshold1=10,threshold2=4),
+         blocknum=as.factor(str_sub(block,7))) %>%
+  do(markTagetMovements(t=.,buffer=200,threshold=200,trial.length=500))%>%
+  filter(!is.na(trialnum))->
+  h
+
+#measure trials join to previous table if needed
+h %>%
+  filter(!is.na(trialnum)) %>%
+  group_by(subject,blocknum,trialnum) %>%
+  do(measureTrial(.))->
+  hm
+
+saveRDS(hm,paste0('dashboardData',Sys.Date(),'.RDS'))
+
+#load the measured data. See previous report for this process. 
+# hm <- readRDS('knightMeasuredDemo2018.RDS')
+```
+
+
+```{r,warning=FALSE}
+#Based on the previous report, I'm rejecting trials with 20 or more interpolated data points during the detected primary gaze shift, and trials where the latency is too short or too long. These ranges can be adjusted if future investigation warrants. 
+
+hm %>%
+  mutate(gaze.onset.ms=(gaze.onset-200)/samplerate) %>%
+  filter(missing.gs<15,
+         gaze.onset.ms>150,
+         gaze.onset.ms<500,
+         abs(peak.gaze.velocity) > 200,
+         # abs(peak.gaze.velocity) < 600,
+         abs(fixation.velocity)<30) %>%
+  # mutate(blocknum=as.factor(str_sub(block,7)))%>%
+  ungroup()->
+  hpp
+
+# hpp <- mutate(hpp,amp.bins.combined=cut(abs(target.amp),breaks=c(0,10,20,30,40,50,60,70,80)))
+
+hpp <- mutate(hpp,amp.bins.combined=cut(abs(target.amp),breaks=c(0,20,40,60,80)))
+```
+
+#Results
+In order to increase the number of trials included in each statistical test I enlarged the amplitude bins to 20 degrees. This gives us <20, 20-40, 40-60 and 60-80. I also combined leftward and rightward movements and ignore any vertical components to the movements. 
+
+```{r GS peak gaze velocity,fig.height=12,fig.width=9}
+ggplot(filter(hpp,!is.na(amp.bins.combined),blocknum<3))+
+  geom_boxplot(aes(amp.bins.combined,abs(peak.gaze.velocity),fill=block),width=0.7,position=position_dodge(1))+
+  ylab('Peak gaze shift velocity (deg/s)')+
+  xlab('Target amplitude bins combined left and right (deg)')+
+  theme_minimal()+
+  ggtitle('comparison of pre and post peak primary gaze shift velocity')+
+  facet_wrap(~subject,ncol=1)+
+  theme(legend.position = 'none')
+
+```
+
+Looking at these boxplots, it seems that subject cg01 shows increased peak gaze shift velocity in block 2 compared with block 1, while subject gN73 shows the opposite effect: reduced peak gaze shift velocity.
+
+I found a new R package for combining statistical tests with plotting called "ggpubr" that simplifies this process. Let's apply it here: 
+
+First I show the verbose output which includes the test name and p-value. Then I show the simplified version that uses asterisks to identify significance levels.
+
+```{r peak.gaze.velocity,fig.height=10}
+p<-hpp %>% 
+  filter(!is.na(amp.bins.combined),
+         blocknum<=2) %>%
+  ggboxplot( x = "blocknum", y = "abs(peak.gaze.velocity)",
+          color = "blocknum", palette = "jco",
+          add = "jitter",
+          facet.by = c("subject","amp.bins.combined"), short.panel.labs = TRUE)
+
+# Use only p.format as label. Remove method name.
+# p + stat_compare_means(label = "p.format")
+p + stat_compare_means()
+
+p + stat_compare_means(label = "p.signif")
+```
+
+We used the Wilxocon test, which is a nonparametric method for comparing the means of two groups. This test agrees with my intuition that there was a significant difference for subjects cg01 and gN73, but not for subject bU07.
+
+We can also look at the additional time points using this same package. In this case we use the Kruskal-Wallis test for non-parametric comparison of multiple groups. 
+
+```{r}
+p<-hpp %>% 
+  filter(!is.na(amp.bins.combined),
+         subject=='bU07') %>%
+  ggboxplot( x = "blocknum", y = "abs(peak.gaze.velocity)",
+          color = "blocknum", palette = "jco",
+          add = "jitter",
+          facet.by = "amp.bins.combined", short.panel.labs = TRUE)
+
+p+stat_compare_means()
+```
+
+This test suggests there could be a difference observable in the primary gaze shift made in response to the largest amplitude movements. This could be something to follow up on. There was no significant difference observable between the first two time points, but the additional time points may push the result to significance. Maybe we could combine all post-concussion blocks into one.
+
+
+
+```{r}
+p<-hpp %>% 
+  filter(!is.na(amp.bins.combined),
+         subject=='bU07') %>%
+  mutate(blocknum=replace(blocknum,as.numeric(blocknum)>2,2)) %>%
+  ggboxplot( x = "blocknum", y = "abs(peak.gaze.velocity)",
+          color = "blocknum", palette = "jco",
+          add = "jitter",
+          facet.by = "amp.bins.combined", short.panel.labs = TRUE)
+
+
+p+stat_compare_means()+
+  ggtitle('Subject bU07: all post-concussion blocks combined')
+```
+
+#Conclusion
+
+It seems that there is enough data to perform the statistical tests and that the differences are big enough to see with the simple stats tests. More effort should be devoted to determining possible causes for the differences observed here (effects of head movement or initial eye position?) and testing other aspects of the response. 
+
+
+
+
