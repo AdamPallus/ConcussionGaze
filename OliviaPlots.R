@@ -235,5 +235,25 @@ for (j in seq_along(filenames)){
 }
 saveSubjects(toPlot,'xxx',width=5,height=5,
              y='abs(peak.gaze.velocity)')
-          
+
+
+
+
+#####Multiple Comparisons----
+ggboxplot(dataset, x = "blocknum", y='abs(peak.gaze.velocity)',
+         color = "blocknum", palette = "jco",
+         add = "jitter",
+         # facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE)
+         facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE) + 
+  stat_compare_means()+
+  # stat_compare_means(label = "p.signif")+
+  xlab('Time point')+
+  ylab('Gaze peak velocity (deg/s)')
+
+#dunntest:https://rcompanion.org/rcompanion/d_06.html
+install.packages('FSA')
+library(FSA)
+dunnTest(abs(peak.gaze.velocity) ~ as.factor(blocknum),data=dataset)
+?p.adjust
+
         
