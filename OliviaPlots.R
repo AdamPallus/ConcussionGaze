@@ -239,21 +239,63 @@ saveSubjects(toPlot,'xxx',width=5,height=5,
 
 
 
-#####Multiple Comparisons----
+
+####Multiple Comparisons----
+dataset %>%
+  filter(subject=='xL16',as.numeric(blocknum)>2,amp.bins.15=='(30,45]') %>%
 ggboxplot(dataset, x = "blocknum", y='abs(peak.gaze.velocity)',
-         color = "blocknum", palette = "jco",
-         add = "jitter",
+         color = "blocknum", palette = "npg",
          # facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE)
          facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE) + 
-  stat_compare_means()+
+  stat_compare_means(label.y=700)+
+  stat_compare_means(comparisons = list(c('5','6'),c('5','7'),c('6','7')))+
   # stat_compare_means(label = "p.signif")+
   xlab('Time point')+
-  ylab('Gaze peak velocity (deg/s)')
+  ylab('Gaze peak velocity (deg/s)')+
+  theme(legend.position = 'none')
+
+saveXL<-function(plt,filename,width=4,height=6,y='abs(peak.gaze.velocity)',
+                 xlabel='Time point',ylabel='Peak gaze velocity (deg/s)'){
+  cairo_pdf(filename,width=width,height=height)
+  p<-dataset %>%
+    filter(subject=='xL16',as.numeric(blocknum)>2,amp.bins.15=='(30,45]') %>%
+    ggboxplot(dataset, x = "blocknum", y='abs(peak.gaze.velocity)',
+              color = "blocknum", palette = "npg",
+              # facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE)
+              facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE) + 
+    stat_compare_means(label.y=700)+
+    stat_compare_means(comparisons = list(c('5','6'),c('5','7'),c('6','7')))+
+    # stat_compare_means(label = "p.signif")+
+    xlab('Time point')+
+    ylab('Gaze peak velocity (deg/s)')+
+    theme(legend.position = 'none')
+  print(p)
+  dev.off()
+}
+
+
+
+
+
+
 
 #dunntest:https://rcompanion.org/rcompanion/d_06.html
 install.packages('FSA')
 library(FSA)
 dunnTest(abs(peak.gaze.velocity) ~ as.factor(blocknum),data=dataset)
+dunnTest(gaze.onset.ms ~ as.factor(blocknum),data=dataset)
+dunnTest(gaze.dur.ms ~ as.factor(blocknum),data=dataset)
+dunnTest(gaze.gain ~ as.factor(blocknum),data=dataset)
+dunnTest(gaze.steps ~ as.factor(blocknum),data=dataset)
 ?p.adjust
+
+
+dataset30<- filter(dataset,amp.bins.15=='(30,45]')
+dunnTest(abs(peak.gaze.velocity) ~ as.factor(blocknum),data=dataset30)
+dunnTest(gaze.onset.ms ~ as.factor(blocknum),data=dataset30)
+dunnTest(gaze.dur.ms ~ as.factor(blocknum),data=dataset30)
+dunnTest(gaze.gain ~ as.factor(blocknum),data=dataset30)
+dunnTest(gaze.steps ~ as.factor(blocknum),data=dataset30)
+
 
         

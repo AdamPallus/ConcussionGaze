@@ -44,15 +44,16 @@ source('knighthelperfunctions.R')
 
 samplerate<- 304.7508/1000
 
-# path<- "F:/dropbox/kdata/"
+path<- "F:/dropbox/kdata/anti/"
 # h<- loadnewheadfree(NULL,path)
-h<-loadnewheadfree()
-h<- select(h,1:13)
-names(h)<- c('G','GV','H','HV','E','EV','time','Targ','Targ2','block','subject','blocknum','task')
+h<-loadnewheadfree(path=path)
+# h<- select(h,1:13)
+names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum','task')
 
 h%>%
   select(G,H,Targ,block,subject,task)%>%
   group_by(block) %>%
+  filter(!is.na(G)) %>%
   mutate(time=row_number(),
          Graw=G,
          G=replace(smooth(G,"3R"),G==0,NA), #mark missing data as NA rather than 0
@@ -67,6 +68,11 @@ h%>%
   filter(!is.na(trialnum))->
   h
 
+#Force antisaccade gaze to be on target...
+h %>%
+  ungroup() %>%
+  mutate(Targ=replace(Targ,task=='AS' &  counter<200,0))->
+  h
 #measure trials join to previous table if needed
 h %>%
   filter(!is.na(trialnum)) %>%
@@ -80,13 +86,14 @@ hm %>%
   select(-recenter)->
   hm
 
+saveRDS(hm,'antisaccadeDashboard2018-3-29.RDS')
 #load the measured data. See previous report for this process. 
 # hm <- readRDS('knightMeasuredDemo2018.RDS')
 
-#For plotting raw data:
-# hh<- left_join(h,hm)
+# #For plotting raw data:
+# hh<- left_join(h2,hm)
 # hh<- filter(hh,trialnum %in% unique(hm$trialnum))
-# saveRDS(hh,'AntiSaccadeTest.RDS')
+# saveRDS(hh,'AntiSaccadeTest3.RDS')
 ```
 
 

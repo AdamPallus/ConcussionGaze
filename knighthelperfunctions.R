@@ -96,7 +96,7 @@ loadnewheadfree<- function(referencefile=NULL,path="~/GitHub/ConcussionGaze/kdat
       # loadedfiles[[i]]$blocknum<-as.numeric(names[3])
       #updated for 2-25-2018 
       #remove extra rows
-      loadedfiles[[i]]<- select(loadedfiles[[i]],1:9)
+      loadedfiles[[i]]<- select(loadedfiles[[i]],1:8)
       #files are named with Subject ID bU07 and block ST1 with ST standing for Saccade Task
       names<-str_match(f,"(^[a-zA-Z0-9]{4})([a-zA-Z0-9]{3})")
       loadedfiles[[i]]$block<-names[1]

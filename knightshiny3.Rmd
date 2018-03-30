@@ -52,7 +52,7 @@ library(plotly)
 # hh<- readRDS('knightdemo.RDS')
 # hh<- readRDS('knightdemo2.RDS')
 # hh<- readRDS('knightdemo4.RDS')
-hh<-readRDS('AntiSaccadeTest.RDS')
+hh<-readRDS('AntiSaccadeTest3.RDS')
 
 
 
@@ -61,6 +61,7 @@ hh <- mutate(hh,
              tcounter=counter/samplerate)
 
 trialnums<- unique(hh$trialnum)
+blocks<- unique(hh$block)
 
 plotTrial<- function(hh){
   # cat(hh$blinktrial[1])
@@ -93,7 +94,7 @@ inputPanel(
   
   selectInput(inputId= 'blockChoice',
               label='Choose block:',
-              choices=list('gN73AS2')),
+              choices=blocks),
   
   sliderInput("TrialChoice", label = "Select a movement:",
               min=1,
