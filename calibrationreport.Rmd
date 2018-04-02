@@ -1,0 +1,195 @@
+---
+title: "Head Calibration and VOR Gain"
+author: "Adam Pallus"
+date: "2 April 2018"
+output:
+  html_document:
+    df_print: paged
+---
+
+In this report, we examine a data file that shows signs of containing miscalibrated data.
+
+The file is gN73AS3.txt
+
+###Examine calibration phase during first 12000 data points:
+```{r,echo=FALSE,message=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE,message=FALSE,warning=FALSE,cache=FALSE)
+```
+
+```{r,message=FALSE,echo=FALSE,warning=FALSE}
+library(plotly)
+library(ggplot2)
+library(dplyr)
+source('knighthelperfunctions.R')
+samplerate<- 304.7508/1000
+
+```
+
+```{r}
+h<-readRDS('calibrationtestdata2.RDS')
+```
+
+
+```{r,eval=FALSE}
+h<-loadnewheadfree(path="C:\\Users\\setup\\Dropbox\\kdata\\test\\")
+# h<- select(h,1:13)
+names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum','task')
+
+h%>%
+  select(G,H,E,Targ,block,subject,task)%>%
+  group_by(block) %>%
+  filter(!is.na(G)) %>%
+  mutate(time=row_number(),
+         Graw=G,
+         G=replace(smooth(G,"3R"),G==0,NA), #mark missing data as NA rather than 0
+         Gnospline=G,
+         G= applyspline(G,6),
+         target.velocity=parabolicdiff(Targ,7)*samplerate,
+         Gv=parabolicdiff(G,7)*samplerate, #calculate velocity
+         Hv=parabolicdiff(H,7)*samplerate,
+         gazeshifts=markMovementsDouble(Gv,threshold1=100,threshold2=10),
+         headmovement=markMovementsDouble(Hv,threshold1=10,threshold2=4)) %>%
+  do(markTagetMovements(t=.,buffer=200,threshold=200,trial.length=500))->#%>%
+  # filter(!is.na(trialnum))->
+  h
+```
+
+```{r firstplot}
+ggplotly(ggplot(filter(h,time<13000))+
+           geom_line(aes(time,Hv/10),color='blue',linetype=2)+
+           geom_line(aes(time,H),color='blue')+
+           geom_hline(yintercept = c(-60,60))+
+           ylab('Head Position (deg)'))
+```
+
+This is showing the position and velocity of the head as reported in the data file. Note that there is a huge velocity spike right at the beginning of the file. This is likely throwing off future calculations that attempt to account for this activity. Because our data are discrete, we can integrate simply by doing a cumulative summation of the previous points. Let's try integrating the head velocity to see what the raw, unadjusted head position would be:
+
+
+
+```{r unadjusted}
+ggplotly(ggplot(filter(h,time<13000))+
+           geom_line(aes(time,Hv/10),color='blue',linetype=2)+
+           geom_line(aes(time,H),color='blue')+
+           geom_line(aes(time,cumsum(Hv)/samplerate/1000),color='orange')+
+           geom_hline(yintercept = c(-60,60))+
+           ylab('Head Position (deg)'))
+```
+
+This is terrible since it is integrating the spike at the beginning. Let's try cutting off the first 50 samples and try again. 
+
+```{r skip50}
+
+ggplotly(ggplot(filter(h,time>50,time<13000))+
+           geom_line(aes(time,Hv/10,label='Head Velocity'),color='blue',linetype=2)+
+           geom_line(aes(time,H,label='Original Head Position'),color='blue')+
+           geom_line(aes(time,cumsum(Hv*1)/samplerate/1000,label='Recalculated Head Position'),color='orange')+
+           geom_hline(yintercept = c(-60,60))+
+           ylab('Head Position (deg)'))
+```
+
+This seems to be a potential immediate improvement. The head is now esimated to be at 0 when the calibration begins and is slightly closer to reaching the target at 60 degrees to the right. However, the next two head movements seem to be too small. 
+
+What if we just sacale the velocity with the assumption that the subject's first head movement accurately aligns the head to the target?
+
+```{r increasegain1}
+ggplotly(ggplot(filter(h,time>50,time<13000))+
+           geom_line(aes(time,Hv/10,label='Head Velocity'),color='blue',linetype=2)+
+           geom_line(aes(time,H,label='Original Head Position'),color='blue')+
+           geom_line(aes(time,cumsum(Hv*1)/samplerate/1000,label='Original Recalc'),color='gray50')+
+           geom_line(aes(time,cumsum(Hv*1.121)/samplerate/1000,label='Increased Gain'),color='orange')+
+           geom_hline(yintercept = c(-60,60))+
+           ylab('Head Position (deg)'))
+```
+
+This is an improvement in all respects, but there is still an offset (not as bad as the original position calculation (blue), and the subsequent head movements are all hypometric. We don't know whether the subject's head was on target for any of these trials, but we can try assuming that the head was on target during the final head movement instead of the first:
+
+```{r increasegain2}
+
+ggplotly(ggplot(filter(h,time>50,time<13000))+
+           geom_line(aes(time,Hv/10,label='Head Velocity'),color='blue',linetype=2)+
+           geom_line(aes(time,H,label='Original Head Position'),color='blue')+
+           geom_line(aes(time,cumsum(Hv*1)/samplerate/1000,label='Original Recalc'),color='gray50')+
+           geom_line(aes(time,cumsum(Hv*1.29)/samplerate/1000,label='Increased Gain More'),color='orange')+
+           geom_hline(yintercept = c(-60,60))+
+           ylab('Head Position (deg)'))
+```
+
+This looks like it could be a more plausible result, but again, there is no way for me to know for certain. Assuming that the subject was on target for the fourth head movement, then the first was a little hypermetric, the next two were slightly hypometric and there is a small offset when the subject returns to zero after the fourth head movement, but this is not as bad as the original calculation showed.
+
+
+
+
+###Can we use the eye signal to help?
+
+It looks like the subject is looking at the visual target while aligning the head. Perhaps we can use this to help our calibration. While assuming that the subject is pointing the head accurately is not a safe assumption, I would feel much more confident that the subject is actually looking at the visual target rather than 10 degrees to the left of the target.
+
+First lets plot the original head and gaze positions as reported by the data file:
+
+
+```{r}
+ggplotly(ggplot(filter(h,time>50,time<13000))+
+           geom_line(aes(time,G),color='darkgreen')+
+           geom_line(aes(time,H),color='blue')+
+           geom_hline(yintercept = c(-60,60))+
+           ylab('Position (deg)')+
+           ggtitle('The Reported Positions'))
+```
+
+This shows the subject's gaze is offset 13.5 degrees to the left of 0. Is there a visual target at zero? If there is then we should adjust our data so that gaze is at zero. Before we do that though, let's see what happens when we undo the Matlab adjustments to the head position by calculating head position directly from head velocity and then calculating gaze by adding the eye position. Note that I haven't removed the blinks form the eye position signal so this makes the gaze signal noisy again.
+
+```{r}
+ggplotly(
+  h %>%
+    filter(time>50,time<13000) %>%
+    mutate(Hvcalc=cumsum(Hv)/samplerate/1000,
+           Gvcalc=Hvcalc+E) %>%
+    ggplot()+
+    geom_line(aes(time,Gvcalc),color='darkgreen')+
+    geom_line(aes(time,Hvcalc),color='blue')+
+    geom_hline(yintercept = c(-60,60))+
+    ylab('Position (deg)')+
+    ggtitle('Positions calculated from Velocity'))
+```
+
+This actually makes it look a lot better, but there is still about a 5 deg offset. Can we fix this?
+
+Let's assume that the subject's gaze was on target during the first movement. We will adjust the gain of the head signal by 1.2:
+
+```{r}
+ggplotly(
+  h %>%
+    filter(time>50,time<13000) %>%
+    mutate(Hvcalc=cumsum(Hv*1.2)/samplerate/1000,
+           Gvcalc=Hvcalc+E) %>%
+    ggplot()+
+    geom_line(aes(time,Gvcalc),color='darkgreen')+
+    geom_line(aes(time,Hvcalc),color='blue')+
+    geom_hline(yintercept = c(-60,60))+
+    ylab('Position (deg)')+
+    ggtitle('Positions calculated from Velocity with Head Gain 1.2'))
+```
+
+This is almost perfect but there is still a little offset to the left. Maybe we can fix this by adding a small offset and reducing the gain a bit?
+
+```{r}
+ggplotly(
+  h %>%
+    filter(time>500,time<13000) %>%
+    mutate(Hvcalc=cumsum(Hv*1.121)/samplerate/1000+3,
+           Gvcalc=Hvcalc+E) %>%
+    ggplot()+
+    geom_line(aes(time,Gvcalc),color='darkgreen')+
+    geom_line(aes(time,Hvcalc),color='blue')+
+    geom_hline(yintercept = c(-60,60))+
+    ylab('Position (deg)')+
+    ggtitle('Head Gain 1.121 and offset 3 deg right'))
+```
+
+Looks good to me!
+
+##Conclusion
+
+I would also say that there is simply no need to run scripts in Matlab to do the integration and calculate a drift correction since we can do whatever calculations are necessary in R using the methods shown in this report. I will plan to calculate the appropriate gain and offset adjustments to the head signal and re-calculate gaze. 
+
+This  means that the only data I need from the original file are the head velocity, the eye position and the target position. I can calculate the rest in R. 
