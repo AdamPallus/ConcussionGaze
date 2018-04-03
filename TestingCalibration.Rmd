@@ -1,0 +1,77 @@
+---
+title: "Eye Calibration and VOR Gain"
+author: "Adam Pallus"
+date: "2 April 2018"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r,echo=FALSE,message=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE,message=FALSE,warning=FALSE,cache=FALSE)
+```
+
+```{r,message=FALSE,echo=FALSE,warning=FALSE}
+library(plotly)
+library(ggplot2)
+library(dplyr)
+source('knighthelperfunctions.R')
+samplerate<- 304.7508/1000
+
+```
+
+```{r,eval=TRUE}
+
+path<- "F:/dropbox/kdata/test/"
+h<-loadnewheadfree(path=path)
+# h<- select(h,1:13)
+names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum','task')
+```
+
+```{r}
+egain=0.87
+eoffset=0
+
+h %>%
+  mutate(time=row_number()) %>%
+  filter(time>50) %>%
+  mutate(Ecal=E*egain+eoffset)->
+  htest
+```
+
+
+```{r}
+ggplotly(
+  htest %>%
+    filter(time<12000) %>%
+    ggplot()+
+    # geom_line(aes(time,E))+
+    geom_line(aes(time,G),color='darkgreen')+
+    geom_line(aes(time,H),color='blue',alpha=0.8)+
+    geom_line(aes(time,E),color='red',alpha=0.8)+
+    # geom_hline(yintercept = c(-58,58))+
+    # geom_line(aes(time,Targ),size=2,alpha=0.5)+
+    ylab('Position (deg)')+
+    ggtitle('Original Data File')+
+    geom_hline(yintercept = c(-58,58))+
+    ylim(-70,70))
+```
+
+
+
+```{r}
+ggplotly(
+  htest %>%
+    filter(time<12000) %>%
+    ggplot()+
+    # geom_line(aes(time,E))+
+    geom_line(aes(time,H+Ecal),color='darkgreen')+
+    geom_line(aes(time,H),color='blue',alpha=0.8)+
+    geom_line(aes(time,Ecal),color='red',alpha=0.8)+
+    ylab('Position (deg)')+
+    ggtitle('Eye Gain = 0.87')+
+    geom_hline(yintercept = c(-58,58))+
+    ylim(-70,70))
+```

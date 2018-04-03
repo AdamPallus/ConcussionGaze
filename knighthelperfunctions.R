@@ -120,6 +120,10 @@ loadnewheadfree<- function(referencefile=NULL,path="~/GitHub/ConcussionGaze/kdat
     message('********NO NEW DATA********')
     t<-NULL
   }
+  names(t)<- c('G','GV','H','HV','E','EV','sampletime','Targ','block','subject','blocknum','task')
+  t %>%
+    mutate(time=row_number())->
+    t
   return(t)
 }
 
@@ -396,3 +400,31 @@ measureTrial<- function(tt, buffer=200){
   
 }
 
+AdjustCalibration<-function(h,eyegain=1,headgain=1,eyeoffset=0,headoffset=0,
+                            applyfilter=TRUE,filterfreq=0.00007,skipsamples=500,
+                            samplerate=0.3047508){
+  require(dplyr)
+  require(signal) #for butterworth
+  filter<-dplyr::filter
+  
+  filterButter<- function(y,freqs=0.00007,type='high'){
+    require(signal)
+    
+    bf <- butter(2, freqs,type=type)
+    # bf <- butter(2, c(.0005,.006))
+    return(filtfilt(bf, y))
+  }
+  
+  h %>%
+    mutate(time=row_number()) %>%
+    filter(time>skipsamples) %>%
+    mutate(H=cumsum(HV*headgain)/samplerate/1000+headoffset)->
+    h
+  if (applyfilter){
+    h <-mutate(h,H=filterButter(H,freqs=filterfreq))
+    }
+  h %>%
+    mutate(E=E*eyegain+eyeoffset,
+           G=H+E)->
+    h
+}
