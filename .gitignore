@@ -3,6 +3,7 @@
 ##########
 *.RDS
 *.nb.html
+*.html
 *.csv
 *.txt
 *.pdf

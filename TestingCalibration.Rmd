@@ -24,21 +24,48 @@ samplerate<- 304.7508/1000
 
 ```{r,eval=TRUE}
 
-path<- "F:/dropbox/kdata/test/"
+# path<- "F:/dropbox/kdata/test/"
+path<- "C:/users/setup/dropbox/kdata/test/"
 h<-loadnewheadfree(path=path)
 # h<- select(h,1:13)
-names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum','task')
+# names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum','task')
 ```
 
 ```{r}
-egain=0.87
-eoffset=0
 
-h %>%
-  mutate(time=row_number()) %>%
-  filter(time>50) %>%
-  mutate(Ecal=E*egain+eoffset)->
-  htest
+
+htest<- AdjustCalibration(h,headoffset= 3,
+                          eyeoffset=2.8,
+                          # eyegain=0.621,
+                          eyegain=0.72,
+                          headgain=1,
+                          applyfilter=FALSE)
+
+filter<-dplyr::filter
+# h %>%
+#   mutate(time=row_number()) %>%
+#   filter(time>50) %>%
+#   mutate(Ecal=E*egain+eoffset)->
+#   htest
+```
+
+
+
+
+```{r}
+ggplotly(
+  htest %>%
+    filter(time>32000,time<90000) %>%
+    ggplot()+
+    # geom_line(aes(time,E))+
+    geom_line(aes(time,G),color='darkgreen')+
+    geom_line(aes(time,H),color='blue',alpha=0.8)+
+    geom_line(aes(time,E),color='red',alpha=0.8)+
+    geom_line(aes(time,Targ))+
+    ylab('Position (deg)')+
+    # ggtitle('Eye Gain = 0.87')+
+    geom_hline(yintercept = c(-58,58))+
+    ylim(-70,70))
 ```
 
 
@@ -55,23 +82,5 @@ ggplotly(
     # geom_line(aes(time,Targ),size=2,alpha=0.5)+
     ylab('Position (deg)')+
     ggtitle('Original Data File')+
-    geom_hline(yintercept = c(-58,58))+
-    ylim(-70,70))
-```
-
-
-
-```{r}
-ggplotly(
-  htest %>%
-    filter(time<12000) %>%
-    ggplot()+
-    # geom_line(aes(time,E))+
-    geom_line(aes(time,H+Ecal),color='darkgreen')+
-    geom_line(aes(time,H),color='blue',alpha=0.8)+
-    geom_line(aes(time,Ecal),color='red',alpha=0.8)+
-    ylab('Position (deg)')+
-    ggtitle('Eye Gain = 0.87')+
-    geom_hline(yintercept = c(-58,58))+
-    ylim(-70,70))
+    geom_hline(yintercept = c(-58,58)))
 ```

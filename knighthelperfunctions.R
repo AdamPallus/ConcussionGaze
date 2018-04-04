@@ -346,12 +346,20 @@ measureTrial<- function(tt, buffer=200){
   target.amp=tt$Targ[300]-tt$Targ[1]
   
   #assess missing
-  total.missing=sum(is.na(tt$Gnospline))
-  missing.critical=sum(is.na(tt$Gnospline[(buffer-100):(buffer+100)]))
-  missing.gs=sum(is.na(tt$Gnospline[gaze.onset:total.gaze.offset]))
+  Graw=replace(tt$Graw,tt$Graw==0,NA)
+  total.missing=sum(is.na(Graw))
+  missing.critical=sum(is.na(Graw[(buffer-100):(buffer+100)]))
+  missing.gs=sum(is.na(Graw[gaze.onset:total.gaze.offset]))
   
   #gaze steps
   gaze.steps=length(good.saccades)
+  
+  #VOR
+  post.saccade.drift=mean(tt$Gv[(gaze.offset+10):(gaze.offset+20)])
+  post.saccade.head=mean(tt$Hv[(gaze.offset+10):(gaze.offset+20)])
+  Ev=tt$Gv-tt$Hv
+  post.saccade.eye=mean(Ev[(gaze.offset+10):(gaze.offset+20)])
+  post.saccade.VOR=post.saccade.eye/post.saccade.head
   
   
   tt %>%
@@ -379,6 +387,10 @@ measureTrial<- function(tt, buffer=200){
             IEPr,
             head.contribution,
             total.head.contribution,
+            post.saccade.drift,
+            post.saccade.head,
+            post.saccade.eye,
+            post.saccade.VOR,
             #firsthead,
             head.onset,
             head.offset,
@@ -407,6 +419,7 @@ AdjustCalibration<-function(h,eyegain=1,headgain=1,eyeoffset=0,headoffset=0,
   require(signal) #for butterworth
   filter<-dplyr::filter
   
+
   filterButter<- function(y,freqs=0.00007,type='high'){
     require(signal)
     
@@ -415,11 +428,14 @@ AdjustCalibration<-function(h,eyegain=1,headgain=1,eyeoffset=0,headoffset=0,
     return(filtfilt(bf, y))
   }
   
+
   h %>%
     mutate(time=row_number()) %>%
     filter(time>skipsamples) %>%
     mutate(H=cumsum(HV*headgain)/samplerate/1000+headoffset)->
     h
+
+  
   if (applyfilter){
     h <-mutate(h,H=filterButter(H,freqs=filterfreq))
     }
@@ -427,4 +443,202 @@ AdjustCalibration<-function(h,eyegain=1,headgain=1,eyeoffset=0,headoffset=0,
     mutate(E=E*eyegain+eyeoffset,
            G=H+E)->
     h
+}
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  # Multiple plot function
+  #http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)/
+  # ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+  # - cols:   Number of columns in layout
+  # - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+  #
+  # If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+  # then plot 1 will go in the upper left, 2 will go in the upper right, and
+  # 3 will go all the way across the bottom.
+  #
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+markSaccadesDouble<- function(v, threshold1=60,threshold2=20,min.dur=5,maxreject=1000,
+                              driftcorrect=FALSE,markFixations=TRUE){
+  #This function is an R implementation of a two-threshold event marker
+  #The algorithm works like this: Find all the times when velocity is above the high threshold
+  #Extend this out until velocity is below the lower threshold
+  
+  #in practice, I'm identifying all the times that the saccades cross the low threshold and then rejecting 
+  #any that don't meet the higher threshold
+  #I'm also rejecting events that are below a certain duration
+  
+  #this algorithm also assigns positive ID numbers to the saccades and 
+  #negative ID numbers to the non-saccades (fixations?)
+  #after running this function, you can group_by(event) and measure the fixations or saccades as you wish
+  require(dplyr)
+  require(data.table) #for rbindlist - a fast version of do.call('rbind') that uses data.table
+  datalength<-length(v)
+  i<-which(abs(v)>threshold2) #find all the times when speed is above the lower threshold
+  
+  #For continuous numbers, diff=1. If there is a larger jump, it means there's a gap. 
+  #That indicates another saccade
+  sacoff<-which(diff(i)>1) #sacoff now contains the indices of the ends of all the saccades
+  #sacon has all the indices of when the saccades start
+  #After an offset, the next index will be the onset of the next saccade.
+  #find the onsets by looking at the next index after the offset
+  sacon<-c(1,sacoff+1) #first saccade always starts at first index
+  sacoff<-c(sacoff,length(i)) #end of last saccade is always at the end
+  event.onset<-i[sacon] #Convert from the indices to actual times
+  event.offset<-i[sacoff] 
+  
+  #event.onset now has the time (in sample time) of all saccade onsets
+  #set up stimes as a data.frame with two columns. Onset and offset. 
+  stimes<- data.frame(event.onset,event.offset) 
+  
+  #this is a little function that works with the weirdness of R's "apply" family of functions
+  #it just takes the onset and offset and returns the whole range. 
+  #if you give it [10, 20], it will return [10 11 12 13 14 15 16 17 18 19 20]
+  jsac<- function(stimes){
+    summary(stimes)
+    #input should be an array of length 4: c(onsettime,offsettime, saccade.number,saccade.dur)
+    df<- data.frame(time=stimes[[1]]:stimes[[2]])
+    df$event<- stimes[[4]]
+    df$event.dur<- stimes[[3]]
+    return(df)
+    # return(stimes[[1]]:stimes[[2]])
+  }
+  
+  stimes %>%
+    mutate(dur=event.offset-event.onset, #calculate duration of each saccade
+           s=row_number())-> #assign an ID number to each saccade
+    stimes
+  
+  #Use "apply" to run the function "jsac" (above) on each line of the "stimes" data.frame
+  #the result is the times of when all the saccades happen
+  x<-rbindlist(apply(stimes,1,jsac)) 
+  
+  v<- data.frame(v=v) #Make the original velocity trace into a data.frame
+  v<- mutate(v, time=row_number()) #add time to keep track
+  
+  #join the marked saccades and the velocity
+  #the result is the velocity trace plus a row that just indicates whether there's a saccade
+  #each saccade is identified by it's unique marker "event" that comes from df$event<- stimes[[4]] above 
+  xx<- left_join(v,x,by='time')
+  
+  if (driftcorrect){
+    #'The way that drift correct works is that it finds when the velocity 
+    #'exceeds the higher threshold and then look for the first time after that
+    #'when the velocity is below 100 deg/s AND the acceleration is below 10,000
+    #'This comes from Mark's published work. He determined these values by comparing
+    #'the firing of MLBs and matching the duration of the burst to the duration of the saccades
+    #'The reason for this correction is that monkeys with strabismus often show a post-saccadic
+    #'drift where the eyes seem to re-accelerate after the end of the saccade which can cause
+    #'velocity-only algorithms to overestimate the duration of the saccade. 
+    xx%>%
+      mutate(event2=event, #you're not allowed to change grouping variables, so make a copy first
+             acc=parabolicdiff(v,7)) %>%
+      group_by(event2) %>%
+      mutate(realstart=first(time[v>threshold1]),
+             total.end=last(time),
+             driftcut=first(time[time>(realstart+10)&abs(v)<100&abs(acc)<10000]),
+             rejectdrift=time>driftcut,
+             event=replace(event,time>driftcut,NA)) %>%
+      ungroup()->
+      xx
+    
+    # xx %>%
+    #   ungroup() %>%
+    #   mutate(acc=parabolicdiff(v,7)) %>%
+    #   mutate(event=replace(event,abs(v)<100 & abs(acc)<10000,NA)) ->
+    #   xx
+  }
+  
+  xx %>%
+    group_by(event) %>% #This means we analyze each saccade individually
+    summarize(max.vel=max(abs(v)), #calculate max velocity
+              dur=n()) %>% #calculate duration
+    filter(max.vel>threshold1, #reject all saccades that fail to exceed the large threshold
+           max.vel<maxreject, #reject all saccades over the max threshold
+           dur>min.dur)-> #reject all saccades that fail to exceed the minimum duration
+    xm #xm is a summary which means it just lists the saccades and their measured values
+  
+  xx %>% #go back to the full data set and now reject all the saccades that were rejected above
+    filter(event %in% unique(xm$event)) %>% 
+    dplyr::select(time,event) -> #All we need is the time and the eventID
+    g
+  
+  if (markFixations){
+    #this next part goes through and assigns an ID to all the non-saccade portions of the data
+    stimes2<- filter(stimes,s %in% unique(xm$event))
+    
+    ftimes<-data.frame(fix.onset=c(1,stimes2$event.offset+1),
+                       fix.offset=c(stimes2$event.onset-1,datalength))
+    
+    ftimes %>%
+      filter(fix.onset>0,fix.offset>0)%>%
+      mutate(dur=fix.offset-fix.onset,
+             s=row_number()) %>%
+      filter(fix.onset<datalength)->
+      ftimes
+    
+    f<-rbindlist(apply(ftimes,1,jsac))
+    
+    f<- select(f,-event.dur)
+    
+    #the code below isn't very elegant, but it just combines the fixations and saccades
+    #and assigns negative IDs to the fixations and positive IDs to the saccades
+    f$issaccade=FALSE 
+    g$issaccade=TRUE
+    fg<-rbind(f,g)
+    fg<- arrange(fg,time)
+    
+    fg$event[!fg$issaccade]=fg$event[!fg$issaccade]*-1
+    
+    #This is a debugging message in case the result isn't the correct length
+    #we have to return a vector of the same length as the input
+    if (length(fg$event)!=datalength){
+      message('FAIL')
+      message(length(fg$event))
+      message(datalength)
+      # message(paste('FAILED: ',length(fg$event,datalength,sep='-')))
+    }
+    else{
+      # message('SUCCESS')
+    }
+    
+    fg$event #return just an array of the IDs of saccades and fixations
+  }else{
+    g<- left_join(select(xx,time),g,by='time')
+    return(g$event)
+  }
+  
 }

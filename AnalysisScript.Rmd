@@ -15,11 +15,19 @@ source('knighthelperfunctions.R')
 
 samplerate<- 304.7508/1000
 
-path<- "F:/dropbox/kdata/anti/"
+# path<- "F:/dropbox/kdata/anti/"
+path<- "C:/users/setup/dropbox/kdata/"
 
 h<-loadnewheadfree(path=path)
 
-h<- AdjustCalibration(h,headoffset=3)
+h<- AdjustCalibration(hraw,headoffset= 3,
+                          eyeoffset=2.8,
+                          # eyegain=0.621,
+                          eyegain=0.7,
+                          headgain=1,
+                          applyfilter=FALSE)
+
+# h<- AdjustCalibration(hraw,headoffset=3)
 
 h%>%
   select(G,H,Targ,block,subject,task)%>%
@@ -33,7 +41,9 @@ h%>%
          target.velocity=parabolicdiff(Targ,7)*samplerate,
          Gv=parabolicdiff(G,7)*samplerate, #calculate velocity
          Hv=parabolicdiff(H,7)*samplerate,
-         gazeshifts=markMovementsDouble(Gv,threshold1=100,threshold2=10),
+         # gazeshifts=markMovementsDouble(Gv,threshold1=100,threshold2=10),
+         gazeshifts=markSaccadesDouble(Gv,threshold1=100,threshold2=20,
+                                       driftcorrect = TRUE,markFixations = FALSE),
          headmovement=markMovementsDouble(Hv,threshold1=10,threshold2=4)) %>%
   do(markTagetMovements(t=.,buffer=200,threshold=200,trial.length=500))%>%
   filter(!is.na(trialnum))->

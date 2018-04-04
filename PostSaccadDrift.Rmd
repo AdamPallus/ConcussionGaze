@@ -1,0 +1,87 @@
+---
+title: "Post-saccadic Drift and VOR Gain"
+author: "Adam Pallus"
+date: "3 April 2018"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+These are trials from xL16ST6 that were identified as having post-saccadic drift
+
+```{r,echo=FALSE,message=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE,message=FALSE,warning=FALSE,cache=FALSE)
+```
+
+```{r,message=FALSE,echo=FALSE,warning=FALSE}
+# library(plotly)
+library(ggplot2)
+library(dplyr)
+source('knighthelperfunctions.R')
+samplerate<- 304.7508/1000
+
+```
+
+```{r,eval=TRUE}
+
+hpp<-readRDS('DemoVORxL16ST6.RDS')
+hpp2<-readRDS('DemoVORxL16ST6-calib2.RDS')
+d<-readRDS('DemoVORxL16ST6-d.RDS')
+trials<-unique(arrange(d,desc(abs(post.saccade.drift)))$trialnum)
+
+
+```
+
+#Original Data
+
+```{r,fig.height=6}
+# for (i in seq_along(trials)){
+for (i in 3:23){
+
+dd<-hpp %>%
+  filter(trialnum==trials[i])
+multiplot(
+  
+  ggplot(dd)+
+    geom_line(aes(counter,G),color='darkgreen')+
+    geom_line(aes(counter,Targ),alpha=0.5,size=2)+
+    geom_line(aes(counter,G*sign(gazeshifts)),size=2,alpha=0.5,color='darkgreen')+
+    geom_line(aes(counter,H),color='blue'),
+  ggplot(dd)+
+    geom_line(aes(counter,Gv),color='darkgreen')+
+    # geom_line(aes(counter,Targ),alpha=0.5,size=2)+
+    geom_line(aes(counter,Gv*sign(gazeshifts)),size=2,alpha=0.5,color='darkgreen')+
+    geom_line(aes(counter,Hv),color='blue')+
+    labs(caption=paste('Trial: ',i))
+)}
+```
+
+#Offline Calibration
+
+
+```{r,fig.height=6}
+# for (i in seq_along(trials)){
+for (i in 3:23){
+
+dd<-hpp2 %>%
+  filter(trialnum==trials[i])
+multiplot(
+  
+  ggplot(dd)+
+    geom_line(aes(counter,G),color='darkgreen')+
+    geom_line(aes(counter,Targ),alpha=0.5,size=2)+
+    geom_line(aes(counter,G*sign(gazeshifts)),size=2,alpha=0.5,color='darkgreen')+
+    geom_line(aes(counter,H),color='blue')+
+    ggtitle('Recalibrated'),
+  ggplot(dd)+
+    geom_line(aes(counter,Gv),color='darkgreen')+
+    # geom_line(aes(counter,Targ),alpha=0.5,size=2)+
+    geom_line(aes(counter,Gv*sign(gazeshifts)),size=2,alpha=0.5,color='darkgreen')+
+    geom_line(aes(counter,Hv),color='blue')+
+    labs(caption=paste('Trial: ',i))
+    
+)}
+```
+
