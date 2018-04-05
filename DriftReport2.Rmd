@@ -1,0 +1,157 @@
+---
+title: "Post-saccadic Drift"
+author: "Adam Pallus"
+date: "3 April 2018"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+
+```{r,echo=FALSE,message=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE,message=FALSE,warning=FALSE,cache=FALSE)
+```
+
+```{r,message=FALSE,echo=FALSE,warning=FALSE}
+library(knitr)
+library(plotly)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(ggpubr)
+source('knighthelperfunctions.R')
+samplerate<- 304.7508/1000
+
+```
+
+```{r,eval=TRUE}
+h<-readRDS('DriftTest1.RDS')
+
+
+
+h %>%
+  mutate(blocknum=as.numeric(str_sub(block,7)),
+         blocknum=replace(blocknum,blocknum>2&subject=='xL16',blocknum-2),
+         blocknum=as.factor(blocknum))%>%
+  filter(!is.na(trialnum)) %>%
+  group_by(task,subject,block,blocknum,trialnum) %>%
+  do(measureTrial(.))->
+  hm
+
+hplot<-filter(hm,missing.gs<5)
+
+```
+
+
+For a very rough calculation of post-saccadic gaze drift, I took the mean velocity of the eyes and head for 10 samples starting 10 samples after the indentified end of the primary gaze shift. VOR gain is calculated as mean(Eye Velocity)/mean(Head Velocity). A normal VOR gain would be approximately -1. 
+
+In the plot below, I show the distribution of VOR gains for each block. A vertical line is drawn at -1, where we would expect VOR gain to be centered.
+
+
+```{r,fig.height=8,fig.width=5}
+qplot(post.saccade.VOR,binwidth=.1,data=filter(hplot,abs(post.saccade.VOR)<3,post.saccade.VOR<0,post.saccade.head>10))+
+  facet_wrap(~block,ncol=3,scales='free')+
+  geom_vline(xintercept = -1)+
+  xlab('VOR gain')
+```
+
+We can also show these data using box plots. I don't know why the stats test didn't work for xL16.
+
+```{r,fig.height=6}
+ggplot(data=filter(hplot,abs(post.saccade.VOR)<3,post.saccade.VOR<0,post.saccade.head>10))+
+  geom_boxplot(aes(blocknum,post.saccade.VOR,fill=block))+
+  facet_wrap(~subject,scales='free',ncol=3)+
+  geom_hline(yintercept = -1,color='red',alpha=0.5)+
+  theme(legend.position='none')
+
+```
+```{r,fig.height=8}
+ggboxplot(data=filter(hplot,abs(post.saccade.VOR)<3,post.saccade.VOR<0,abs(post.saccade.head)>10), 
+                 x = "blocknum", y="post.saccade.VOR",
+                  color = "blocknum", palette = "jco",
+                  facet.by = c("subject"),scales='free_x',ncol=3)+
+  # stat_compare_means(label="p.signif")+
+  stat_compare_means()+
+  theme(legend.position='none')
+
+ggboxplot(data=filter(hplot,abs(post.saccade.VOR)<2,post.saccade.VOR< -0.5,abs(post.saccade.head)>10), 
+          x = "blocknum", y="post.saccade.VOR*-1",
+          color = "blocknum", palette = "jco",
+          facet.by = c("subject"),scales='free_x',ncol=3)+
+    # stat_compare_means(label="p.signif")+
+    stat_compare_means()+
+    theme(legend.position='none')+
+    geom_hline(yintercept = 1,linetype=2)+
+    ylab('Post-saccadic VOR gain')+
+    xlab('Time Point')
+
+
+
+hplot %>%
+  filter(abs(post.saccade.VOR)<5) %>%
+  group_by(subject,blocknum) %>%
+  summarize(mean.VOR.gain=mean(post.saccade.VOR))->
+  gaintab
+
+kable(gaintab)
+
+
+```
+
+
+We can plot the post-saccadic eye and head velocity against each other. If the gain is one, then the points will be along the black y= -x line. This will allow us to see if VOR gain is linear or non-linear. 
+
+```{r,fig.height=8}
+ggplot(filter(hplot,abs(post.saccade.head)>10),aes(post.saccade.head,post.saccade.eye,color=blocknum))+
+  geom_point()+
+  geom_abline(slope=-1)+
+  stat_smooth(method='lm',se=FALSE)+
+  facet_wrap(~subject,ncol=4,scales='free')+
+  theme(legend.position='bottom')
+```
+
+Here I'm just plotting the regression lines from the plots above without the data points. 
+
+```{r,fig.height=8}
+ggplot(filter(hplot,abs(post.saccade.head)>10),aes(post.saccade.head,post.saccade.eye,color=blocknum))+
+  # geom_point()+
+  geom_abline(slope=-1)+
+  stat_smooth(method='lm',se=FALSE)+
+  facet_wrap(~subject,ncol=4,scales='free')+
+  theme(legend.position='bottom')
+```
+
+I set a threshold of 10 deg/s and counted the number of trials that had at least that much post-saccadic drift. Below I plot the total number for each block from each subjet and then I plot the percentage of total acceptable trials.
+
+```{r,driftcount}
+drifters<-filter(hplot,abs(post.saccade.drift)>10,abs(post.saccade.head)>10)
+
+drifters %>%
+  group_by(subject,blocknum) %>%
+  tally()->
+  driftcount
+
+hplot %>%
+  group_by(subject,blocknum) %>%
+  summarize(total_n=n()) %>%
+  left_join(driftcount) %>%
+  mutate(driftpercent=n/total_n)->
+  alldriftcount
+
+ggplot(driftcount,aes(blocknum,n,fill=subject))+
+  geom_bar(stat='identity')+
+  facet_wrap(~subject,scales='free_x')+
+  ylab('Number of Trials with Post-saccadic Drift')+
+  theme(legend.position = 'none')+
+  labs(caption='Trials with missing data omitted')
+
+ggplot(alldriftcount,aes(blocknum,driftpercent,fill=subject))+
+  geom_bar(stat='identity')+
+  facet_wrap(~subject,scales='free_x')+
+  ylab('Percentage of Good Trials with Post-saccadic Drift')+
+  theme(legend.position = 'none')+
+  labs(caption='Trials with missing data omitted')
+```
+
