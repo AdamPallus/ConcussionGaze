@@ -40,7 +40,15 @@ h %>%
   mutate(control = subject %in% control.subjects)->
   hm
 
-hplot<-filter(hm,missing.gs<5)
+hm %>%
+  ungroup() %>%
+  filter(missing.gs<5) %>%
+              mutate(post.saccade.VOR=post.saccade.VOR*-1) %>%
+              filter(abs(post.saccade.head)>5,
+                     post.saccade.VOR<2,
+                     post.saccade.VOR>0.5
+              ) ->
+  hplot
 
 ```
 
@@ -53,17 +61,17 @@ In the plot below, I show the distribution of VOR gains for each block. A vertic
 ```{r,fig.height=8,fig.width=5}
 qplot(post.saccade.VOR,binwidth=.1,data=filter(hplot,abs(post.saccade.VOR)<3))+
   facet_wrap(~block,ncol=3,scales='free')+
-  geom_vline(xintercept = -1)+
+  geom_vline(xintercept = 1)+
   xlab('VOR gain')
 ```
 
 We can also show these data using box plots. I don't know why the stats test didn't work for xL16.
 
 ```{r,fig.height=6}
-ggplot(filter(hplot,abs(post.saccade.VOR)<3))+
-  geom_boxplot(aes(blocknum,post.saccade.VOR,fill=block))+
+ggplot(hplot)+
+  geom_boxplot(aes(as.factor(blocknum),post.saccade.VOR,fill=block))+
   facet_wrap(~subject,scales='free',ncol=3)+
-  geom_hline(yintercept = -1,color='red',alpha=0.5)+
+  geom_hline(yintercept = 1,color='red',alpha=0.5)+
   theme(legend.position='none')
 
 ```
@@ -88,7 +96,8 @@ hplot %>%
   stat_compare_means()+
   theme(legend.position='none')+
   xlab('Time Point')+
-  ylab('Post-saccade VOR gain')
+  ylab('Post-saccade VOR gain')+
+  ggtitle('Control Subjects')
 
 hplot %>%
   ungroup() %>%
