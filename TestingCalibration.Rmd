@@ -29,17 +29,36 @@ path<- "C:/users/setup/dropbox/kdata/test/"
 h<-loadnewheadfree(path=path)
 # h<- select(h,1:13)
 # names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum','task')
+h1<- filter(h,blocknum=='1')
+h2<- filter(h,blocknum=='2')
 ```
 
 ```{r}
 
 
-htest<- AdjustCalibration(h,headoffset= 3,
-                          eyeoffset=2.8,
-                          # eyegain=0.621,
-                          eyegain=0.72,
-                          headgain=1,
+# htest<- AdjustCalibration(h,headoffset= 3,
+#                           eyeoffset=2.8,
+#                           # eyegain=0.621,
+#                           eyegain=0.72,
+#                           headgain=1,
+#                           applyfilter=FALSE)
+
+#CP48ST1
+htest1<- AdjustCalibration(h1,headoffset= 0,
+                          eyeoffset=0,
+                          eyegain=0.64,
+                          headgain=.73 ,
                           applyfilter=FALSE)
+#CP48ST2
+htest2<- AdjustCalibration(h2,headoffset= 2,
+                          eyeoffset=0,
+                          eyegain=.77,
+                          headgain=.8 ,
+                          applyfilter=FALSE)
+
+recal<-rbind(htest1,htest2)
+
+
 
 filter<-dplyr::filter
 # h %>%
@@ -55,7 +74,7 @@ filter<-dplyr::filter
 ```{r}
 ggplotly(
   htest %>%
-    filter(time>32000,time<90000) %>%
+    filter(time>40000,time<120000) %>%
     ggplot()+
     # geom_line(aes(time,E))+
     geom_line(aes(time,G),color='darkgreen')+
@@ -65,7 +84,7 @@ ggplotly(
     ylab('Position (deg)')+
     # ggtitle('Eye Gain = 0.87')+
     geom_hline(yintercept = c(-58,58))+
-    ylim(-70,70))
+    ylim(-80,80))
 ```
 
 
