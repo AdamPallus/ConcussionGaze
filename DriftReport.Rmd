@@ -25,14 +25,19 @@ samplerate<- 304.7508/1000
 
 ```
 
-```{r,eval=TRUE}
+```{r,eval=TRUE,warning=FALSE}
 h<-readRDS('DriftTest1.RDS')
 
+
+control.subjects<-c('Cj21', 'hS83', 'UG56', 'wR49', 'Fq58')
+
 h %>%
-  mutate(blocknum=as.factor(str_sub(block,7)))%>%
+  mutate(blocknum=as.factor(str_sub(block,7)),
+         E=G-H)%>%
   filter(!is.na(trialnum)) %>%
   group_by(task,subject,block,blocknum,trialnum) %>%
-  do(measureTrial(.))->
+  do(measureTrial(.)) %>%
+  mutate(control = subject %in% control.subjects)->
   hm
 
 hplot<-filter(hm,missing.gs<5)
@@ -62,6 +67,7 @@ ggplot(filter(hplot,abs(post.saccade.VOR)<3))+
   theme(legend.position='none')
 
 ```
+
 ```{r,fig.height=8}
 ggboxplot(filter(hplot,abs(post.saccade.VOR)<5), 
                  x = "blocknum", y="post.saccade.VOR",
@@ -72,10 +78,59 @@ ggboxplot(filter(hplot,abs(post.saccade.VOR)<5),
   theme(legend.position='none')
 
 hplot %>%
+  filter(abs(post.saccade.VOR)<5,
+         control,
+         blocknum<3) %>%
+  ggboxplot(x = "blocknum", y="post.saccade.VOR",
+                  color = "blocknum", palette = "jco",
+                  facet.by = c("subject"),scales='free_x',ncol=3)+
+  # stat_compare_means(label="p.signif")+
+  stat_compare_means()+
+  theme(legend.position='none')+
+  xlab('Time Point')+
+  ylab('Post-saccade VOR gain')
+
+hplot %>%
+  ungroup() %>%
+  filter(subject=='xL16') %>%
+  filter(blocknum %in% c('5','6')) %>%
+  mutate(blocknum=as.factor(as.numeric(blocknum)-4))->
+  hplotXL
+  
+hplotconc<-filter(hplot,!control,subject!='xL16',blocknum %in% c('1','2'))
+hplotconc<-rbind(ungroup(hplotconc),hplotXL)
+
+  hplotconc %>%
+  filter(abs(post.saccade.VOR)<5) %>%
+  ggboxplot(x = "blocknum", y="post.saccade.VOR",
+                  color = "blocknum", palette = "jco",
+                  facet.by = c("subject"),scales='free_x',ncol=3)+
+  # stat_compare_means(label="p.signif")+
+  stat_compare_means()+
+  theme(legend.position='none')+
+  xlab('Time Point')+
+  ylab('Post-saccade VOR gain')
+  
+  
+hplotAdjusted<- rbind(hplotconc,ungroup(filter(hplot,control)))
+
+hplotAdjusted %>%
   filter(abs(post.saccade.VOR)<5) %>%
   group_by(subject,blocknum) %>%
-  summarize(mean.VOR.gain=mean(post.saccade.VOR))->
+  summarize(median.VOR.gain=mean(post.saccade.VOR))->
   gaintab
+
+  hplotAdjusted %>%
+  filter(abs(post.saccade.VOR)<5) %>%
+  ggboxplot(x = "blocknum", y="post.saccade.VOR",
+                  color = "blocknum", palette = "jco",
+                  facet.by = c("subject"),scales='free_x',ncol=3)+
+  # stat_compare_means(label="p.signif")+
+  stat_compare_means()+
+  theme(legend.position='none')+
+  xlab('Time Point')+
+  ylab('Post-saccade VOR gain')
+
 
 kable(gaintab)
 
@@ -136,4 +191,89 @@ ggplot(alldriftcount,aes(blocknum,driftpercent,fill=subject))+
   theme(legend.position = 'none')+
   labs(caption='Trials with missing data omitted')
 ```
+
+
+```{r}
+alldriftcount %>%
+  filter(control=='Control') %>%
+ggplot(aes(blocknum,driftpercent,fill=subject))+
+  geom_bar(stat='identity')+
+  facet_wrap(~subject,scales='free_x')+
+  ylab('Fraction of Good Trials with Post-saccadic Drift')+
+  theme_minimal()+
+  theme(legend.position = 'none')+
+    xlab('Time Point')+
+  ggtitle('Control Subjects')
+
+alldriftcount %>%
+  filter(control=='Concussed') %>%
+ggplot(aes(blocknum,driftpercent,fill=subject))+
+  geom_bar(stat='identity')+
+  facet_wrap(~subject,scales='free_x')+
+  ylab('Fraction of Good Trials with Post-saccadic Drift')+
+  theme_minimal()+
+    theme(legend.position = 'none')+
+  xlab('Time Point')
+```
+
+
+
+```{r}
+drifters<-filter(hplotAdjusted,abs(post.saccade.drift)>10,abs(post.saccade.head)>10)
+
+drifters %>%
+  group_by(subject,blocknum,control) %>%
+  tally()->
+  driftcount
+
+hplotAdjusted %>%
+  group_by(subject,blocknum,control) %>%
+  summarize(total_n=n()) %>%
+  left_join(driftcount) %>%
+  mutate(driftpercent=n/total_n)->
+  alldriftcount
+
+
+library(tidyr)
+
+alldriftcount$control<- as.factor(alldriftcount$control)
+levels(alldriftcount$control)<-c('Concussed','Control')
+alldriftcount %>%
+  select(-n,-total_n) %>%
+  ungroup() %>%
+   spread(key = blocknum,value=driftpercent)->
+   ss
+
+s$concussed<- as.factor(s$concussed)
+levels(s$concussed)<-c('Control','Concussed')
+ 
+ggpaired(ss,cond1='1',cond2='2',facet='control',
+         palette = 'jco',line.color = "gray", line.size = 0.4)+
+  stat_compare_means(paired=TRUE)+
+  xlab('Time Point')+
+  ylab('Fraction of Trials with post-saccadic drift')
+
+
+alldriftcount %>%
+  mutate(post.block=control=='Concussed' & blocknum == '2')->
+  alldriftcount
+
+alldriftcount$post.block<-as.factor(alldriftcount$post.block)
+levels(alldriftcount$post.block)<-c('Control and Pre-concussion','Post-concussion')
+
+ggpaired(alldriftcount,x='post.block',y='driftpercent*100',
+         palette = 'npg',color='post.block',line.color = "gray", line.size = 0.4)+
+    stat_compare_means(paired=TRUE)+
+  xlab('Time Point')+
+  ylab('Percentage of Trials with Post-Saccadic Drift')+
+  theme(legend.position='none')
+
+ggboxplot(alldriftcount,x='post.block',y='driftpercent*100',
+         palette = 'lancet',color='post.block')+
+    stat_compare_means()+
+  xlab('Time Point')+
+  ylab('Percentage of Trials with Post-Saccadic Drift')+
+  theme(legend.position='none')
+```
+
 
