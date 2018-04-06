@@ -46,7 +46,7 @@ h2<- filter(h,blocknum=='2')
 #CP48ST1
 htest1<- AdjustCalibration(h1,headoffset= 0,
                           eyeoffset=0,
-                          eyegain=0.64,
+                          eyegain=0.7,
                           headgain=.73 ,
                           applyfilter=FALSE)
 #CP48ST2
@@ -68,12 +68,40 @@ filter<-dplyr::filter
 #   htest
 ```
 
+```{r}
+recal%>%
+  select(G,H,Targ,block,subject,task)%>%
+  group_by(block) %>%
+  filter(!is.na(G)) %>%
+  mutate(time=row_number(),
+         Graw=G,
+         G=replace(smooth(G,"3R"),G==0,NA), #mark missing data as NA rather than 0
+         Gnospline=G,
+         G= applyspline(G,6),
+         target.velocity=parabolicdiff(Targ,7)*samplerate,
+         Gv=parabolicdiff(G,7)*samplerate, #calculate velocity
+         Hv=parabolicdiff(H,7)*samplerate,
+         # gazeshifts=markMovementsDouble(Gv,threshold1=100,threshold2=10),
+         gazeshifts=markSaccadesDouble(Gv,threshold1=100,threshold2=20,
+                                       driftcorrect = TRUE,markFixations = FALSE),
+         headmovement=markMovementsDouble(Hv,threshold1=10,threshold2=4)) %>%
+  do(markTagetMovements(t=.,buffer=200,threshold=200,trial.length=500))%>%
+  filter(!is.na(trialnum))->
+  recal
+
+#measure trials join to previous table if needed
+recal%>%
+  filter(!is.na(trialnum)) %>%
+  group_by(task,subject,block,trialnum) %>%
+  do(measureTrial(.))->
+  hm
+```
 
 
 
 ```{r}
 ggplotly(
-  htest %>%
+  htest1 %>%
     filter(time>40000,time<120000) %>%
     ggplot()+
     # geom_line(aes(time,E))+

@@ -86,12 +86,14 @@ ggboxplot(filter(hplot,abs(post.saccade.VOR)<5),
   theme(legend.position='none')
 
 hplot %>%
-  filter(abs(post.saccade.VOR)<5,
+  filter(abs(post.saccade.VOR)<2,post.saccade.VOR> 0.5,abs(post.saccade.head)>10,
+  # filter(abs(post.saccade.VOR)<5,
          control,
          blocknum<3) %>%
   ggboxplot(x = "blocknum", y="post.saccade.VOR",
                   color = "blocknum", palette = "jco",
                   facet.by = c("subject"),scales='free_x',ncol=3)+
+      geom_hline(yintercept = 1,linetype=2)+
   # stat_compare_means(label="p.signif")+
   stat_compare_means()+
   theme(legend.position='none')+
@@ -110,10 +112,12 @@ hplotconc<-filter(hplot,!control,subject!='xL16',blocknum %in% c('1','2'))
 hplotconc<-rbind(ungroup(hplotconc),hplotXL)
 
   hplotconc %>%
-  filter(abs(post.saccade.VOR)<5) %>%
+     filter(abs(post.saccade.VOR)<2,post.saccade.VOR> 0.5,abs(post.saccade.head)>10) %>%
+  # filter(abs(post.saccade.VOR)<5) %>%
   ggboxplot(x = "blocknum", y="post.saccade.VOR",
                   color = "blocknum", palette = "jco",
                   facet.by = c("subject"),scales='free_x',ncol=3)+
+          geom_hline(yintercept = 1,linetype=2)+
   # stat_compare_means(label="p.signif")+
   stat_compare_means()+
   theme(legend.position='none')+
