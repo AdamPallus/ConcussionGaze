@@ -96,7 +96,9 @@ loadnewheadfree<- function(referencefile=NULL,path="~/GitHub/ConcussionGaze/kdat
       # loadedfiles[[i]]$blocknum<-as.numeric(names[3])
       #updated for 2-25-2018 
       #remove extra rows
-      loadedfiles[[i]]<- select(loadedfiles[[i]],1:8)
+      # if (ncol(loadedfiles[[i]])>8){
+      #   loadedfiles[[i]]<- select(loadedfiles[[i]],1:8)
+      # }
       #files are named with Subject ID bU07 and block ST1 with ST standing for Saccade Task
       names<-str_match(f,"(^[a-zA-Z0-9]{4})([a-zA-Z0-9]{3})")
       loadedfiles[[i]]$block<-names[1]
@@ -104,7 +106,7 @@ loadnewheadfree<- function(referencefile=NULL,path="~/GitHub/ConcussionGaze/kdat
       loadedfiles[[i]]$blocknum<-as.numeric(str_sub(names[3],3))
       task<-str_sub(names[3],1,2)
       loadedfiles[[i]]$task<- task
-      if (task=='AS'){ #antisaccade dask needs target data fixed
+      if (task=='AS' & ncol(loadedfiles[[i]])>8){ #antisaccade dask needs target data fixed
         #'There are three targets in the anti saccade files
         #'but only the second is useful. The central fixation is always at zero
         #'If this changes, the value in V7 should be used instead of zero
@@ -120,7 +122,13 @@ loadnewheadfree<- function(referencefile=NULL,path="~/GitHub/ConcussionGaze/kdat
     message('********NO NEW DATA********')
     t<-NULL
   }
-  names(t)<- c('G','GV','H','HV','E','EV','sampletime','Targ','block','subject','blocknum','task')
+  if (ncol(t) == 12){
+    names(t)<- c('G','GV','H','HV','E','EV','sampletime','Targ','block','subject','blocknum','task')
+  }
+  
+  if (ncol(t) == 7){
+    names(t)<-c('Hv','Ep','Targ','block','subject','blocknum','task')
+  }
   t %>%
     mutate(time=row_number())->
     t
