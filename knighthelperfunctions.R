@@ -127,7 +127,7 @@ loadnewheadfree<- function(referencefile=NULL,path="~/GitHub/ConcussionGaze/kdat
   }
   
   if (ncol(t) == 7){
-    names(t)<-c('Hv','Ep','Targ','block','subject','blocknum','task')
+    names(t)<-c('HV','E','Targ','block','subject','blocknum','task')
   }
   t %>%
     mutate(time=row_number())->
@@ -424,27 +424,28 @@ AdjustCalibration<-function(h,eyegain=1,headgain=1,eyeoffset=0,headoffset=0,
                             applyfilter=TRUE,filterfreq=0.00007,skipsamples=500,
                             samplerate=0.3047508){
   require(dplyr)
-  require(signal) #for butterworth
-  filter<-dplyr::filter
-  
 
-  filterButter<- function(y,freqs=0.00007,type='high'){
-    require(signal)
-    
-    bf <- butter(2, freqs,type=type)
-    # bf <- butter(2, c(.0005,.006))
-    return(filtfilt(bf, y))
-  }
   
 
   h %>%
     mutate(time=row_number()) %>%
-    filter(time>skipsamples) %>%
+    dplyr::filter(time>skipsamples) %>%
     mutate(H=cumsum(HV*headgain)/samplerate/1000+headoffset)->
     h
 
   
   if (applyfilter){
+    require(signal) #for butterworth
+    filter<-dplyr::filter
+    
+    
+    filterButter<- function(y,freqs=0.00007,type='high'){
+      require(signal)
+      
+      bf <- butter(2, freqs,type=type)
+      # bf <- butter(2, c(.0005,.006))
+      return(filtfilt(bf, y))
+    }
     h <-mutate(h,H=filterButter(H,freqs=filterfreq))
     }
   h %>%

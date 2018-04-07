@@ -15,8 +15,8 @@ source('knighthelperfunctions.R')
 
 samplerate<- 304.7508/1000
 
-# path<- "F:/dropbox/kdata/anti/"
-path<- "C:/users/setup/dropbox/kdata/newform/"
+path<- "F:/dropbox/kdata/newform/"
+# path<- "C:/users/setup/dropbox/kdata/newform/"
 
 h<-loadnewheadfree(path=path)
 
