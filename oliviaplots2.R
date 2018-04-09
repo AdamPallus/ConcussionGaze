@@ -7,17 +7,26 @@ yvars<- c('abs(peak.gaze.velocity)','abs(head.contribution)','gaze.onset.ms',
 ylabs<- c('Peak gaze velocity (deg/s)','Head contribution (deg)','Gaze latency (ms)',
           'Gaze duration (ms)','Gaze gain','Gaze steps')
 
-ylabspot<- c(700,50,650,650,5,3)
+ylabspot<- c(700,50,650,650,3,3)
 
 subjects<-c('xL16')
 
+dataset %>%
+  filter(subject %in% subjects,
+         gaze.gain>0) %>%
+  mutate(blocknum=as.numeric(blocknum)) %>%
+  filter(blocknum>2) %>%
+  mutate(blocknum=blocknum-4)->
+  dolivia
+         
+
 for (i in seq_along(subjects)){
   fn<- paste0(filenames,subjects[i],'.pdf')
-  toPlot<-filter(dataset,
-                 amp.bins.15=='(30,45]',
+  toPlot<-filter(dolivia,
+                 # amp.bins.15=='(30,45]',
                  subject==subjects[i])
   for (j in seq_along(fn)){
-    saveXL(toPlot,fn[j],widt=5,height=5,
+    saveXL(toPlot,fn[j],widt=15,height=5,
                    y=yvars[j],ylabel=ylabs[j],
            ylabspot=ylabspot[j])
   }

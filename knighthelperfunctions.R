@@ -126,6 +126,16 @@ loadnewheadfree<- function(referencefile=NULL,path="~/GitHub/ConcussionGaze/kdat
     names(t)<- c('G','GV','H','HV','E','EV','sampletime','Targ','block','subject','blocknum','task')
   }
   
+  if (ncol(t)==14){
+    t$V9<-NULL
+  }
+  
+  
+  if (ncol(t) == 13){
+    names(t)<- c('G','GV','H','HV','E','EV','sampletime','Targ','block','subject','blocknum','task','time')
+  }
+  
+  
   if (ncol(t) == 7){
     names(t)<-c('HV','E','Targ','block','subject','blocknum','task')
   }
@@ -372,7 +382,7 @@ measureTrial<- function(tt, buffer=200){
   
   tt %>%
     ungroup() %>%
-    summarize_at(c('block','trialnum'),funs(first))->
+    summarize_at(c('block','trialnum','blocknum'),funs(first))->
     d
 
   # message(paste0('Attempting: ',tt$block[1],'-',tt$trialnum[1],'\n'))
