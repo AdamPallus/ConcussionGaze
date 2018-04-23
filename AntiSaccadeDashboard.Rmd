@@ -1,11 +1,12 @@
 ---
 title: "Anti-Saccade Gaze Shifts and Concussions"
-output: 
+resource_files:
+- antisaccadeDashboard2018-4-22.RDS
+runtime: shiny
+output:
   flexdashboard::flex_dashboard:
     orientation: columns
     social: menu
-# source_code: embed
-runtime: shiny
 ---
 
 ```{r global, include=FALSE,warning=FALSE}
@@ -23,7 +24,8 @@ library(stringr)
 # hm <- readRDS('dashboardData3-3-2018.RDS')
 # hm <- readRDS('dashboardData2018-03-19.RDS')
 # hm <- readRDS('antisaccadeDashboard2018-3-29.RDS')
-hm <- readRDS('antisaccadeDashboard2018-4-07.RDS')
+# hm <- readRDS('antisaccadeDashboard2018-4-07.RDS')
+hm <- readRDS('antisaccadeDashboard2018-4-22.RDS')
 samplerate<- 304.7508/1000
 hm %>%
   mutate(blocknum=as.factor(str_sub(block,7)),

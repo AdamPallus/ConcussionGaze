@@ -445,19 +445,19 @@ AdjustCalibration<-function(h,eyegain=1,headgain=1,eyeoffset=0,headoffset=0,
 
   
   if (applyfilter){
-    require(signal) #for butterworth
-    filter<-dplyr::filter
-    
-    
-    filterButter<- function(y,freqs=0.00007,type='high'){
-      require(signal)
-      
-      bf <- butter(2, freqs,type=type)
-      # bf <- butter(2, c(.0005,.006))
-      return(filtfilt(bf, y))
-    }
-    h <-mutate(h,H=filterButter(H,freqs=filterfreq))
-    }
+    # require(signal) #for butterworth
+    # filter<-dplyr::filter
+    # 
+    # 
+    # filterButter<- function(y,freqs=0.00007,type='high'){
+    #   require(signal)
+    #   
+    #   bf <- butter(2, freqs,type=type)
+    #   # bf <- butter(2, c(.0005,.006))
+    #   return(filtfilt(bf, y))
+    # }
+    # h <-mutate(h,H=filterButter(H,freqs=filterfreq))
+  }
   h %>%
     mutate(E=E*eyegain+eyeoffset,
            G=H+E)->

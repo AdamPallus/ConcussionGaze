@@ -63,11 +63,11 @@ getstats<- function(d,form){
   names(l) <- c('p.gv','p.latency','p.dur','p.gain','p.steps')
   
   d %>%
-    summarize(mean.gv=mean(abs(peak.gaze.velocity)),
-              mean.latency=mean(gaze.onset.ms),
-              mean.dur=mean(gaze.dur.ms),
-              mean.gain=mean(gaze.gain),
-              mean.steps=mean(gaze.steps),
+    summarize(median_gv=median(abs(peak.gaze.velocity)),
+              median_latency=median(gaze.onset.ms),
+              median_dur=median(gaze.dur.ms),
+              median_gain=median(gaze.gain),
+              median_steps=median(gaze.steps),
               sd.gv=sd(abs(peak.gaze.velocity)),
               sd.latency=sd(gaze.onset.ms),
               sd.dur=sd(gaze.dur.ms),
@@ -103,6 +103,14 @@ stats.table %>%
 
 write.csv(dtable,'Fall2016_n.csv')
 write.csv(stats.table,'Fall2016_stats.csv')
+
+
+#antisaccade
+dataset %>%
+  group_by(block,amp.bins.15,anti_saccade) %>%
+  do(getstats(.)) %>%
+  select(-starts_with("p."))->
+  stats.table
 
 
 dataset<- filter(dataset, subject %in% goodsubjects)
