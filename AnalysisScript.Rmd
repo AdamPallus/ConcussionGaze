@@ -15,17 +15,50 @@ source('knighthelperfunctions.R')
 
 samplerate<- 304.7508/1000
 
-# path<- "F:/dropbox/kdata/newform/"
-path<- "C:/users/setup/dropbox/kdata/"
+path<- "F:/dropbox/kdata/april/"
+# path<- "C:/users/setup/dropbox/kdata/"
 
 h<-loadnewheadfree(path=path)
 
-h<- AdjustCalibration(hraw,headoffset= 3,
-                          eyeoffset=2.8,
-                          # eyegain=0.621,
-                          eyegain=0.7,
-                          headgain=1,
-                          applyfilter=FALSE)
+#This is needed to fix all the issues with the new data files----
+
+#Drop the first 500 samples because they are just noise
+#convert head velocity to head position
+#Fix messed up data files with "#VALUE!" instead of NANs
+h %>%
+  group_by(block) %>%
+  dplyr::filter(time>500) %>%
+  mutate(H=cumsum(HV*1)/samplerate/1000+0,
+         E=replace(E,E=='#VALUE!',0),
+         E=as.numeric(as.character(E)))->
+  h
+
+#Use a 3rd degree polynomial to fix the head signal as it drifts around
+fixH<- function(t){
+  mod<- lm(H~poly(time,3),data=t)
+  t %>%
+    mutate(H=H-predict(mod,newdata=t))->
+    t
+  return(t)
+}
+
+h %>%
+  group_by(block) %>%
+  do(fixH(.)) %>%
+  mutate(G=H+E)->
+  h
+
+#Resume regular program----
+
+
+  
+
+# h<- AdjustCalibration(hraw,headoffset= 3,
+#                           eyeoffset=2.8,
+#                           # eyegain=0.621,
+#                           eyegain=0.7,
+#                           headgain=1,
+#                           applyfilter=FALSE)
 
 # h<- AdjustCalibration(hraw,headoffset=3)
 

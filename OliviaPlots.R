@@ -63,19 +63,7 @@ getstats<- function(d,form){
   names(l) <- c('p.gv','p.latency','p.dur','p.gain','p.steps')
   
   d %>%
-<<<<<<< HEAD
-    summarize(median_gv=median(abs(peak.gaze.velocity)),
-              median_latency=median(gaze.onset.ms),
-              median_dur=median(gaze.dur.ms),
-              median_gain=median(gaze.gain),
-              median_steps=median(gaze.steps),
-              sd.gv=sd(abs(peak.gaze.velocity)),
-              sd.latency=sd(gaze.onset.ms),
-              sd.dur=sd(gaze.dur.ms),
-              sd.gain=sd(gaze.gain),
-              sd.steps=sd(gaze.steps),
-              n=n()) %>%
-=======
+
     summarize(#mean.gv=mean(abs(peak.gaze.velocity)),
       #mean.latency=mean(gaze.onset.ms),
       #mean.dur=mean(gaze.dur.ms),
@@ -92,7 +80,6 @@ getstats<- function(d,form){
       sd_gain=sd(gaze.gain),
       sd_steps=sd(gaze.steps),
       n=n()) %>%
->>>>>>> origin/master
     bind_cols(l)->
     l
               
@@ -124,7 +111,7 @@ write.csv(dtable,'Fall2016_n.csv')
 write.csv(stats.table,'Fall2016_stats.csv')
 
 
-<<<<<<< HEAD
+
 #antisaccade
 dataset %>%
   group_by(block,amp.bins.15,anti_saccade) %>%
@@ -132,7 +119,7 @@ dataset %>%
   select(-starts_with("p."))->
   stats.table
 
-=======
+
 #ANTISACCADE FOR KAIA
 dataset %>%
   # filter(anti_saccade) %>%
@@ -140,7 +127,15 @@ dataset %>%
   do(getstats(.)) ->
   stats.table
 write.csv(stats.table,'AntisaccadeSummaryTable.csv')
->>>>>>> origin/master
+
+#antisaccade success rate
+dataset %>%
+  group_by(subject,block,anti_saccade) %>%
+  tally() %>%
+  mutate(fail_rate=n[anti_saccade]/sum(n))->
+  assuc
+
+write.csv(assuc,'AntiSaccadeSuccessRate.csv')
 
 dataset<- filter(dataset, subject %in% goodsubjects)
 
