@@ -1,0 +1,236 @@
+---
+title: "Anti-saccade stats"
+author: "Adam Pallus"
+date: "1 May 2018"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an attempt to keep track of the anti-saccade data and avoid the confusion of analyzing these data multiple times without remembering what changed since the last time.
+
+#Setup
+
+First lets just load the data. I copied the block directly from the dashboard code, so we will be using exactly the data that are on the dashboard.
+
+```{r,echo=FALSE,message=FALSE}
+library(knitr)
+opts_chunk$set(echo=TRUE,message=FALSE,warning=FALSE,cache=FALSE)
+```
+
+```{r,message=FALSE,echo=FALSE,warning=FALSE}
+library(plotly)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(ggpubr)
+library(knitr)
+source('knighthelperfunctions.R')
+samplerate<- 304.7508/1000
+
+```
+
+```{r,eval=TRUE,warning=FALSE}
+hm <- readRDS('antisaccadeDashboard2018-4-22.RDS')
+samplerate<- 304.7508/1000
+hm %>%
+  mutate(blocknum=as.factor(str_sub(block,7)),
+         gaze.onset.ms=(gaze.onset-200)/samplerate,
+         head.onset.ms=(head.onset-200)/samplerate,
+         gaze.dur.ms=(gaze.dur)/samplerate,
+         IEPr=IEP*sign(gaze.amp),
+         gaze.gain=gaze.amp/target.amp,
+         anti_saccade=(gaze.amp*target.amp)<0) %>%
+  filter(missing.gs<15,
+         gaze.onset.ms>150,
+         gaze.onset.ms<1000,
+         abs(peak.gaze.velocity) > 200) %>%
+  ungroup() %>%
+  select(peak.gaze.velocity,
+         gaze.onset.ms,
+         head.onset.ms,
+         gaze.dur.ms,
+         gaze.gain,
+         anti_saccade,
+         peak.head.velocity,
+         head.contribution,
+         gaze.amp,
+         gaze.dur,
+         subject,
+         block,
+         blocknum,
+         trialnum,
+         target.amp,
+         head.amp,
+         IEPr,
+         gaze.steps,
+         total.gaze.amp,
+         total.gaze.dur,
+         total.head.contribution)->
+  hpp
+
+# hpp <- mutate(hpp,amp.bins.combined=cut(abs(target.amp),breaks=c(0,10,20,30,40,50,60,70,80)))
+
+hpp <- mutate(hpp,amp.bins.20 = cut(abs(target.amp),breaks=c(0,20,40,60,80)))
+
+hpp <- mutate(hpp,amp.bins.15 = cut(abs(target.amp),breaks=c(0,15,30,45,60,75,90)))
+
+hpp <- mutate(hpp,amp.bins.10 = cut(abs(target.amp),breaks=c(0,10,20,30,40,50,60,70,80,90)))
+
+hpp <- mutate(hpp,gaze.amp.bins.10 = cut(abs(gaze.amp),breaks=c(0,10,20,30,40,50,60,70,80,90)))
+
+#remove NA bins and extra blocks
+hpp %>%
+  filter(!is.na(amp.bins.15))->
+  hpp
+
+hpp %>%
+  mutate(blocknum= as.factor(blocknum),
+         block= as.factor(block),
+         subject=as.factor(subject))->
+  dataset
+```
+
+#Results
+
+##Counts and success rates
+
+Now we can do a count of the total number of trials, and the success rate for anti-saccades:
+
+```{r}
+dataset %>%
+  group_by(subject,block) %>%
+  summarize(total=n(),
+            nAnti=sum(anti_saccade),
+            percent_anti=nAnti/total,
+            blocknum=first(blocknum))->
+  assuc
+
+kable(assuc,digits=2)
+
+ggplot(assuc)+
+  geom_bar(aes(block,percent_anti,fill=subject),size=2,stat='identity')+
+   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  ylab('Anti-saccade Sucess Rate')
+
+ggplot(assuc)+
+  geom_bar(aes(block,total,fill=subject),size=2,stat='identity')+
+   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  ylab('Total Number of Accepted Trials')
+```
+
+Note that I am rejecting trials where there is a gaze shift sooner than 150 ms (assumed to be planned before the target moved) or later than 1000 ms (assume the subject ignored the target). I'm also rejecting trials where there are more than 15 missing samples (due to blinks or other interruptions in the visual eye tracker) or where the peak velocity of the primary saccade is't at least 200 deg/s (assumed to be a catch-up saccade, which we don't want to treat as a primary gaze shift).
+
+##Stats and medians
+
+Next, let's do some stats:
+
+First, we will look at the median for five different metrics for each block, grouped by 15-degree target amplitude bins, JUST ANTISACCADES (Gaze gain should always be negative). Also note that gaze gain only measures the FIRST saccade made in response to the target movement, and does not include any subsequent catch-up saccades. 
+
+```{r}
+
+dataset %>%
+  filter(anti_saccade) %>% 
+  group_by(block,anti_saccade,amp.bins.15) %>%
+    summarize(#mean.gv=mean(abs(peak.gaze.velocity)),
+      #mean.latency=mean(gaze.onset.ms),
+      #mean.dur=mean(gaze.dur.ms),
+      #mean.gain=mean(gaze.gain),
+      #mean.steps=mean(gaze.steps),
+      median_gv=median(abs(peak.gaze.velocity)),
+      median_latency=median(gaze.onset.ms),
+      median_dur=median(gaze.dur.ms),
+      median_gain=median(gaze.gain),
+      median_steps=median(gaze.steps),
+      sd_gv=sd(abs(peak.gaze.velocity)),
+      sd_latency=sd(gaze.onset.ms),
+      sd_dur=sd(gaze.dur.ms),
+      sd_gain=sd(gaze.gain),
+      sd_steps=sd(gaze.steps),
+      n=n()) ->
+  blockmeasurements
+
+kable(blockmeasurements,digits=2)
+```
+
+Now let's do the same thing but just looking at failed anti-saccades, otherwise known as "prosaccades:"
+```{r}
+
+dataset %>%
+  filter(!anti_saccade) %>% 
+  group_by(block,anti_saccade,amp.bins.15) %>%
+    summarize(#mean.gv=mean(abs(peak.gaze.velocity)),
+      #mean.latency=mean(gaze.onset.ms),
+      #mean.dur=mean(gaze.dur.ms),
+      #mean.gain=mean(gaze.gain),
+      #mean.steps=mean(gaze.steps),
+      median_gv=median(abs(peak.gaze.velocity)),
+      median_latency=median(gaze.onset.ms),
+      median_dur=median(gaze.dur.ms),
+      median_gain=median(gaze.gain),
+      median_steps=median(gaze.steps),
+      sd_gv=sd(abs(peak.gaze.velocity)),
+      sd_latency=sd(gaze.onset.ms),
+      sd_dur=sd(gaze.dur.ms),
+      sd_gain=sd(gaze.gain),
+      sd_steps=sd(gaze.steps),
+      n=n()) ->
+  blockmeasurements
+
+kable(blockmeasurements,digits=2)
+```
+
+##Stats tests
+
+Next we will test the null hypothesis that the true means of each block are the same for each subject. We test this using non-parametric unpaired Wilcoxon tests for subjects with two blocks, and using the Kruskal-Wallis Rank Sum Test for subjects with more than two blocks. I'm only doing this test for anti-saccades. For tests where there is not enough data, I set the p-value to -10.
+
+```{r}
+getstats<- function(d,form){
+  nblocks<-length(unique(d$blocknum))
+  
+  p.gv= 10
+  p.latency= 10
+  p.dur = 10
+  p.gain = 10
+  p.steps = 10
+  if (nblocks == 2){
+    p.gv=wilcox.test(abs(peak.gaze.velocity) ~ blocknum,data=d)$p.value
+    p.latency= wilcox.test(gaze.onset.ms ~ blocknum,data=d)$p.value
+    p.dur = wilcox.test(gaze.dur ~ blocknum,data=d)$p.value
+    p.gain = wilcox.test(gaze.gain ~ blocknum,data=d)$p.value
+    p.steps = wilcox.test(gaze.steps ~ blocknum,data=d)$p.value
+  } 
+  
+  if (nblocks > 2){
+    p.gv=kruskal.test(abs(peak.gaze.velocity) ~ blocknum,data=d)$p.value
+    p.latency= kruskal.test(gaze.onset.ms ~ blocknum,data=d)$p.value
+    p.dur = kruskal.test(gaze.dur.ms ~ blocknum,data=d)$p.value
+    p.gain = kruskal.test(gaze.gain ~ blocknum,data=d)$p.value
+    p.steps = kruskal.test(gaze.steps ~ blocknum,data=d)$p.value
+  } 
+  
+  # return(list(p.gv,p.latency,p.dur,p.gain,p.steps))
+  l<-list(p.gv,p.latency,p.dur,p.gain,p.steps)
+  l[is.na(l)]<- 10
+  l<- as.data.frame(l)
+  names(l) <- c('p.gv','p.latency','p.dur','p.gain','p.steps')
+  l
+}
+
+dataset %>%
+  filter(anti_saccade) %>%
+  group_by(subject,amp.bins.15) %>%
+  do(getstats(.))->
+  pvals
+
+kable(pvals,digits=6)
+```
+
+Which of these subjects/bins have any significant differences between blocks, using a threshold of p < 0.05?
+
+```{r}
+pvals %>%
+  filter(p.gv<0.05|p.latency<0.05|p.dur<0.05|p.gain<0.05|p.steps<0.05) %>%
+  kable(digits=6)
+```
+

@@ -130,9 +130,16 @@ write.csv(stats.table,'AntisaccadeSummaryTable.csv')
 
 #antisaccade success rate
 dataset %>%
+  group_by(subject,block) %>%
+  summarize(total=n(),
+            nAnti=sum(anti_saccade),
+            percent_anti=nAnti/total)->
+  assuc
+
+dataset %>%
   group_by(subject,block,anti_saccade) %>%
   tally() %>%
-  mutate(fail_rate=n[anti_saccade]/sum(n))->
+  mutate(success_rate=n[anti_saccade]/sum(n))->
   assuc
 
 write.csv(assuc,'AntiSaccadeSuccessRate.csv')

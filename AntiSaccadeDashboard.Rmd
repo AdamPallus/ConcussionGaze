@@ -37,7 +37,7 @@ hm %>%
          anti_saccade=(gaze.amp*target.amp)<0) %>%
   filter(missing.gs<15,
          gaze.onset.ms>150,
-         gaze.onset.ms<500,
+         gaze.onset.ms<1000,
          abs(peak.gaze.velocity) > 200) %>%
   ungroup() %>%
   select(peak.gaze.velocity,
