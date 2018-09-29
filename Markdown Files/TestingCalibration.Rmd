@@ -24,8 +24,8 @@ samplerate<- 304.7508/1000
 
 ```{r,eval=TRUE}
 
-# path<- "F:/dropbox/kdata/test/"
-path<- "C:/users/setup/dropbox/kdata/test/"
+path<- "F:/dropbox/kdata/test/"
+# path<- "C:/users/setup/dropbox/kdata/test/"
 h<-loadnewheadfree(path=path)
 # h<- select(h,1:13)
 # names(h)<- c('G','GV','H','HV','E','EV','time','Targ','block','subject','blocknum','task')
@@ -70,7 +70,7 @@ filter<-dplyr::filter
 
 ```{r}
 recal%>%
-  select(G,H,Targ,block,subject,task)%>%
+  select(G,H,Targ,block,subject,task,blocknum)%>%
   group_by(block) %>%
   filter(!is.na(G)) %>%
   mutate(time=row_number(),
@@ -97,6 +97,22 @@ recal%>%
   hm
 ```
 
+```{r original}
+ggplotly(
+  h1 %>%
+    filter(time>40000,time<120000) %>%
+    ggplot()+
+    # geom_line(aes(time,E))+
+    geom_line(aes(time,G),color='darkgreen')+
+    geom_line(aes(time,H),color='blue',alpha=0.8)+
+    geom_line(aes(time,E),color='red',alpha=0.8)+
+    geom_line(aes(time,Targ))+
+    ylab('Position (deg)')+
+    # ggtitle('Eye Gain = 0.87')+
+    geom_hline(yintercept = c(-58,58))+
+    ylim(-80,80)+
+    ggtitle('Original Data'))
+```
 
 
 ```{r}
@@ -112,7 +128,8 @@ ggplotly(
     ylab('Position (deg)')+
     # ggtitle('Eye Gain = 0.87')+
     geom_hline(yintercept = c(-58,58))+
-    ylim(-80,80))
+    ylim(-80,80)+
+    ggtitle('Recalibrated Data'))
 ```
 
 
