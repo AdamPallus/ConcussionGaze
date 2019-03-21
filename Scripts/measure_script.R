@@ -9,7 +9,7 @@ h <- loadGazeFiles(path = files_location)
 
 #CHECK TO SEE IF RAW DATA LOOK APPROPRIATE (HEAD END GAZE MOVING IN SAME DIRECTION AS TARGET?)
 
-manipulate(ggplot(h %>% filter(block == 'CP48ST1',
+manipulate(ggplot(h %>% filter(block == 'cg01ST1',
                                time > timestart, 
                                time<timestart+1000))+
              geom_line(aes(time, E), color = 'hotpink')+
@@ -67,7 +67,7 @@ hh <- left_join(h, hm)
 
 manipulate({
   trials = unique(hh$trialnum)
-  ggplot(hh %>% filter(block == 'CP48ST1',
+  ggplot(hh %>% filter(block == 'cg01ST1',
                       trialnum == trials[chosenTrial]) %>%
            mutate(counter = counter*samplerate))+
     geom_line(aes(counter, G-H), color = 'hotpink')+
@@ -83,5 +83,25 @@ manipulate({
     
   },
   chosenTrial = slider(1, length(unique(hh$trialnum))))
+
+## append to dashboard data
+# hm %>%
+#   ungroup() %>%
+#   mutate(subject = paste0(subject, 'n'))->
+#   hm
+
+
+# hm_old <- readRDS('dashboard2018-02-10.RDS')
+# 
+# hm_old %>% 
+#   filter(subject != 'CP48n') %>%
+#   bind_rows(hm)->
+#   hmfull
+
+saveRDS(hm,'dashboard2019-03-20.RDS' )
+
+
+
+
 
 

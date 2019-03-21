@@ -20,7 +20,9 @@ library(ggpubr)
 
 
 # hm <- readRDS('dashboardData3-3-2018.RDS')
-hm <- readRDS('dashboardData2018-03-19.RDS')
+# hm <- readRDS('dashboardData2018-03-19.RDS')
+# hm <- readRDS('dashboardData2019-1-21.RDS')
+hm <- readRDS('dashboard2019-03-20.RDS')
 samplerate<- 304.7508/1000
 hm %>%
   mutate(gaze.onset.ms=(gaze.onset-200)/samplerate,
@@ -84,7 +86,7 @@ Inputs {.sidebar}
 
 ```{r}
 
-selectizeInput(inputId='subjects', label='Select Subjects', choices=unique(hpp$subject), selected = unique(hpp$subject), multiple = TRUE)
+selectizeInput(inputId='subjects', label='Select Subjects', choices=unique(hpp$subject), selected = unique(hpp$subject)[1], multiple = TRUE)
 
 
 checkboxInput('jitter', 'Jitter', value = TRUE)
@@ -174,12 +176,19 @@ renderPlot({
   # }else{
   #   p <- ggplot(plotData(), aes_string(x=input$x, y=input$y)) 
   # }
-  
-  p<-  ggboxplot( plotData(), x = "blocknum", y=paste0('abs(',input$y,')'),
+  if (input$absY){
+    p<-  ggboxplot( plotData(), x = "blocknum", y=paste0('abs(',input$y,')'),
           color = "blocknum", palette = "jco",
           add = "jitter",
           # facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE)
           facet.by = c("subject",input$facet_col), short.panel.labs = TRUE)
+  }else{
+     p<-  ggboxplot( plotData(), x = "blocknum", y=input$y,
+          color = "blocknum", palette = "jco",
+          add = "jitter",
+          # facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE)
+          facet.by = c("subject",input$facet_col), short.panel.labs = TRUE)
+  }
 
   p<-p + stat_compare_means(label = "p.signif")
   

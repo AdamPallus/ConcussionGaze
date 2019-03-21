@@ -1,20 +1,40 @@
 function combineMAT()
 
-[stfile, stpath] = uigetfile('*.mat','Choose Experiment File');
-if stfile == 0
-    return
+files = {};
+while length(files) ~= 2
+    [files path] = uigetfile('*.mat','Choose Experiment File',...
+        'multiselect', 'on');
 end
-[escfile, escpath] = uigetfile('*.mat','Choose Data File');
-if escfile == 0
-    return
+
+if strcmp(files{1}(1:2), 'ST')
+    stfile = files{1};
+    escfile = flies{2};
+else
+    stfile = files{2};
+    escfile = files{1};
 end
+
+disp(path)
+
+% [stfile, stpath] = uigetfile('*.mat','Choose Experiment File');
+% if stfile == 0
+%     return
+% end
+% [escfile, escpath] = uigetfile('*.mat','Choose Data File');
+% if escfile == 0
+%     return
+% end
 [savefile, savepath] = uiputfile('*.csv', 'Save Combined File');
 if savepath == 0
-    print('ABORTING...')
+    disp('ABORTING...')
     return
 end
-st = load([stpath stfile]);
-esc = load([escpath escfile]);
+% xx = split(path, '\');
+% savefile = xx{10};
+% savepath = path;
+
+st = load([path stfile]);
+esc = load([path escfile]);
 
 hhv = esc.Data(:,71);
 rep = esc.Data(:,37);
@@ -47,4 +67,5 @@ sttable.sampletime = ceil(sttable.adjustedtime/sample_rate);
 
 
 tt= outerjoin(t,sttable,'key','sampletime','MergeKeys',true);
+
 writetable(tt, [savepath savefile])
