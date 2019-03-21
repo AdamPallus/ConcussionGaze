@@ -45,7 +45,7 @@ library(plotly)
 # z<-readRDS(file="Bee13forshiny.RDS")
 # hh<- readRDS('knightdemo.RDS')
 # hh<- readRDS('knightdemo2.RDS')
-hh<- readRDS('knightdemo4.RDS')
+hh<- readRDS('2019test.RDS')
 
 plotTrial<- function(hh){
   # cat(hh$blinktrial[1])
@@ -58,11 +58,11 @@ plotTrial<- function(hh){
     # geom_line(aes(tcounter,EV/10),color='red')+
     geom_line(aes(tcounter,Gv/10),color='darkgreen',linetype=2)+
     # geom_text(x=0,y=50,aes(label=round(sd(Gv),2)))+
-    geom_point(aes(tcounter,sign(gazeshifts)*50),color='darkgreen')+
-    geom_point(aes(tcounter,sign(headmovement)*25),color='blue')+
-    geom_line(aes(tcounter,sign(primarygazeshifts)*Gv/10),size=2,color='darkgreen',alpha=0.5)+
+    #geom_point(aes(tcounter,sign(gazeshifts)*50),color='darkgreen')+
+    #geom_point(aes(tcounter,sign(headmovement)*25),color='blue')+
+    #geom_line(aes(tcounter,sign(primarygazeshifts)*Gv/10),size=2,color='darkgreen',alpha=0.5)+
     # geom_line(aes(tcounter,sign(gazeshifts)*Gv/10),size=2,color='yellow',alpha=0.5)+
-    geom_line(aes(tcounter,sign(primaryheadmovement)*Hv/10),color='blue',size=2,alpha=0.5)+
+    #geom_line(aes(tcounter,sign(primaryheadmovement)*Hv/10),color='blue',size=2,alpha=0.5)+
     xlab('Time (ms)')
     
     # geom_line(aes(tcounter,sign(headmovement)*Hv/10),color='blue',size=2,alpha=0.5)+
