@@ -283,6 +283,8 @@ measureTrial<- function(tt, buffer=200){
   #This function will receive data from one trial and return a one-row data frame
   
   trial.length<- nrow(tt)
+  
+  tt$E = tt$G-tt$H
   # task<-first(tt$task)
   
   #identify the id number of the first saccade that satisfies the criteria 
@@ -345,9 +347,11 @@ measureTrial<- function(tt, buffer=200){
   head.offset<-NA
   peak.head.velocity<-NA
   head.amp<-NA
+
   if (!is.infinite(firsthead)){
     head.onset=first(tt$counter[tt$headmovement==firsthead&!is.na(tt$headmovement)])
     head.offset=last(tt$counter[tt$headmovement==firsthead&!is.na(tt$headmovement)])
+
     if (head.onset<total.gaze.offset){ #ignore head movements that start after the gaze shifts are done
       peak.head.velocity=maxabs(tt$Hv[tt$headmovement==firsthead])
       head.amp=tt$H[tt$counter==head.offset]-tt$H[tt$counter==head.onset]
@@ -359,7 +363,11 @@ measureTrial<- function(tt, buffer=200){
       head.amp=NA
     }
   }
-  
+  if (is.na(head.offset)){
+    post.VOR.EP = NA
+  }else{
+    post.VOR.EP =  tt$E[tt$counter == head.offset]
+  }
   #measure target
   target.amp=tt$Targ[300]-tt$Targ[1]
   
@@ -378,6 +386,7 @@ measureTrial<- function(tt, buffer=200){
   Ev=tt$Gv-tt$Hv
   post.saccade.eye=mean(Ev[(gaze.offset+10):(gaze.offset+20)])
   post.saccade.VOR=post.saccade.eye/post.saccade.head
+  
   
   
   tt %>%
@@ -409,6 +418,7 @@ measureTrial<- function(tt, buffer=200){
             post.saccade.head,
             post.saccade.eye,
             post.saccade.VOR,
+            post.VOR.EP,
             #firsthead,
             head.onset,
             head.offset,

@@ -22,7 +22,7 @@ library(ggpubr)
 # hm <- readRDS('dashboardData3-3-2018.RDS')
 # hm <- readRDS('dashboardData2018-03-19.RDS')
 # hm <- readRDS('dashboardData2019-1-21.RDS')
-hm <- readRDS('dashboard2019-03-20.RDS')
+hm <- readRDS('dashboard2019-03-21.RDS')
 samplerate<- 304.7508/1000
 hm %>%
   mutate(gaze.onset.ms=(gaze.onset-200)/samplerate,
@@ -51,6 +51,7 @@ hm %>%
          target.amp,
          head.amp,
          IEPr,
+         post.VOR.EP,
          gaze.steps,
          total.gaze.amp,
          total.gaze.dur,
