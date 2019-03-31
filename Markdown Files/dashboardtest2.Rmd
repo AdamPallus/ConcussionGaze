@@ -14,6 +14,7 @@ library(ggplot2)
 library(mgcv)
 library(plotly)
 library(ggpubr)
+library(dplyr)
 # dataset <- diamonds
 # dataset <- readRDS('KnightData3-2-2018.RDS')
 # dataset <- readRDS('KnightBoxplotData3-2-2018.RDS')
@@ -22,7 +23,7 @@ library(ggpubr)
 # hm <- readRDS('dashboardData3-3-2018.RDS')
 # hm <- readRDS('dashboardData2018-03-19.RDS')
 # hm <- readRDS('dashboardData2019-1-21.RDS')
-hm <- readRDS('dashboard2019-03-21.RDS')
+hm <- readRDS('dashboard2019-03-31.RDS')
 samplerate<- 304.7508/1000
 hm %>%
   mutate(gaze.onset.ms=(gaze.onset-200)/samplerate,
@@ -67,6 +68,30 @@ hpp <- mutate(hpp,amp.bins.15 = cut(abs(target.amp),breaks=c(0,15,30,45,60,75,90
 hpp <- mutate(hpp,amp.bins.10 = cut(abs(target.amp),breaks=c(0,10,20,30,40,50,60,70,80,90)))
 
 hpp <- mutate(hpp,gaze.amp.bins.10 = cut(abs(gaze.amp),breaks=c(0,10,20,30,40,50,60,70,80,90)))
+
+hpp <-  mutate(hpp, iep_centered_10 = case_when(
+          abs(IEPr) <= 10 ~ "centered",
+          TRUE ~ "off-center"),
+               iep_bin_15= case_when(
+          IEPr > 0 & IEPr <=15 ~ '(0,15]',
+          IEPr > 15 & IEPr <=30 ~ '(15,30]',
+          IEPr < 0 & IEPr >= -15 ~ '[-15,0)',
+          IEPr < -15 & IEPr >= -30 ~ '[-30,-15)'),
+          
+          iep_bin_6= case_when(
+            abs(IEPr) < 6 ~ '(-6, 6)',
+            IEPr > 6 & IEPr <=18 ~ '(6,18]',
+            IEPr > 18 & IEPr <=30 ~ '(18,30]',
+            IEPr < -6 & IEPr >= -18 ~ '[-18,6)',
+            IEPr < -18 & IEPr >= -30 ~ '[-30,-18)'),
+          gaze_dir = case_when(
+            gaze.amp> 0 ~ 'RIGHTWARD',
+            gaze.amp<0 ~ 'LEFTWARD'
+          ),
+          iep_centered = as.factor(iep_centered_10),
+          iep_bin_6 = as.factor(iep_bin_6),
+          iep_bin_15 = as.factor(iep_bin_15),
+          gaze_dir = as.factor(gaze_dir))
 
 #remove NA bins and extra blocks
 hpp %>%
@@ -182,13 +207,13 @@ renderPlot({
           color = "blocknum", palette = "jco",
           add = "jitter",
           # facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE)
-          facet.by = c("subject",input$facet_col), short.panel.labs = TRUE)
+          facet.by = c(input$facet_row,input$facet_col), short.panel.labs = TRUE)
   }else{
      p<-  ggboxplot( plotData(), x = "blocknum", y=input$y,
           color = "blocknum", palette = "jco",
           add = "jitter",
           # facet.by = c("subject","amp.bins.15"), short.panel.labs = TRUE)
-          facet.by = c("subject",input$facet_col), short.panel.labs = TRUE)
+          facet.by = c(input$facet_row,input$facet_col), short.panel.labs = TRUE)
   }
 
   p<-p + stat_compare_means(label = "p.signif")

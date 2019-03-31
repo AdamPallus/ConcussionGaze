@@ -9,15 +9,15 @@ h <- loadGazeFiles(path = files_location)
 
 #CHECK TO SEE IF RAW DATA LOOK APPROPRIATE (HEAD END GAZE MOVING IN SAME DIRECTION AS TARGET?)
 
-manipulate(ggplot(h %>% filter(block == 'cg01ST1',
-                               time > timestart, 
-                               time<timestart+1000))+
-             geom_line(aes(time, E), color = 'hotpink')+
-             geom_line(aes(time, H), color = 'darkblue')+
-             geom_line(aes(time, na.spline(G)), color = 'darkgreen')+
-             geom_point(aes(time, Targ)),
-           timestart = slider(1, 200000, step = 900 ))
-
+# manipulate(ggplot(h %>% filter(block == 'cg01ST1',
+#                                time > timestart, 
+#                                time<timestart+1000))+
+#              geom_line(aes(time, E), color = 'hotpink')+
+#              geom_line(aes(time, H), color = 'darkblue')+
+#              geom_line(aes(time, na.spline(G)), color = 'darkgreen')+
+#              geom_point(aes(time, Targ)),
+#            timestart = slider(1, 200000, step = 900 ))
+# 
 
 
 #'Next: remove noise, blinks etc
@@ -43,15 +43,15 @@ h%>%
   h
 
 #CHECK AGAIN
-manipulate({
-  trials = unique(h$trialnum)
-  ggplot(h %>% filter(block == 'CP48ST1',
-                      trialnum == trials[chosenTrial],))+
-             geom_line(aes(time, G-H), color = 'hotpink')+
-             geom_line(aes(time, H), color = 'darkblue')+
-             geom_line(aes(time, G), color = 'darkgreen')+
-             geom_point(aes(time, Targ))},
-           chosenTrial = slider(1, length(unique(h$trialnum))))
+# manipulate({
+#   trials = unique(h$trialnum)
+#   ggplot(h %>% filter(block == 'CP48ST1',
+#                       trialnum == trials[chosenTrial],))+
+#              geom_line(aes(time, G-H), color = 'hotpink')+
+#              geom_line(aes(time, H), color = 'darkblue')+
+#              geom_line(aes(time, G), color = 'darkgreen')+
+#              geom_point(aes(time, Targ))},
+#            chosenTrial = slider(1, length(unique(h$trialnum))))
 
 #'Next: measure trials
 
@@ -62,27 +62,27 @@ h %>%
   hm
 
 
-#CHECK
-hh <- left_join(h, hm)
-
-manipulate({
-  trials = unique(hh$trialnum)
-  ggplot(hh %>% filter(block == 'cg01ST1',
-                      trialnum == trials[chosenTrial]) %>%
-           mutate(counter = counter*samplerate))+
-    geom_line(aes(counter, G-H), color = 'hotpink')+
-    geom_line(aes(counter, H), color = 'darkblue')+
-    geom_line(aes(counter, G), color = 'darkgreen')+
-    geom_point(aes(counter, Targ))+
-    geom_vline(aes(xintercept = gaze.onset*samplerate), color = 'darkgreen')+
-    geom_vline(aes(xintercept = gaze.offset*samplerate), linetype = 2, color = 'darkgreen')+
-    geom_vline(aes(xintercept = total.gaze.offset*samplerate),linetype = 2, color = 'darkgreen')+
-    geom_vline(aes(xintercept = head.onset*samplerate),color = 'darkblue')+
-    geom_vline(aes(xintercept = head.offset*samplerate), linetype = 2,color = 'darkblue')+
-    xlab('Time (ms)')
-    
-  },
-  chosenTrial = slider(1, length(unique(hh$trialnum))))
+# #CHECK
+# hh <- left_join(h, hm)
+# 
+# manipulate({
+#   trials = unique(hh$trialnum)
+#   ggplot(hh %>% filter(block == 'cg01ST1',
+#                       trialnum == trials[chosenTrial]) %>%
+#            mutate(counter = counter*samplerate))+
+#     geom_line(aes(counter, G-H), color = 'hotpink')+
+#     geom_line(aes(counter, H), color = 'darkblue')+
+#     geom_line(aes(counter, G), color = 'darkgreen')+
+#     geom_point(aes(counter, Targ))+
+#     geom_vline(aes(xintercept = gaze.onset*samplerate), color = 'darkgreen')+
+#     geom_vline(aes(xintercept = gaze.offset*samplerate), linetype = 2, color = 'darkgreen')+
+#     geom_vline(aes(xintercept = total.gaze.offset*samplerate),linetype = 2, color = 'darkgreen')+
+#     geom_vline(aes(xintercept = head.onset*samplerate),color = 'darkblue')+
+#     geom_vline(aes(xintercept = head.offset*samplerate), linetype = 2,color = 'darkblue')+
+#     xlab('Time (ms)')
+#     
+#   },
+#   chosenTrial = slider(1, length(unique(hh$trialnum))))
 
 ## append to dashboard data
 # hm %>%
@@ -98,7 +98,7 @@ manipulate({
 #   bind_rows(hm)->
 #   hmfull
 
-saveRDS(hm,'dashboard2019-03-20.RDS' )
+saveRDS(hm,'~/knight/ConcussionGaze/Markdown Files/dashboard2019-03-31.RDS' )
 
 
 
